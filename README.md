@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Therapios Wireframes
+
+A simple wireframing tool for creating and demonstrating feature mockups. This tool allows you to quickly build wireframes for client presentations without needing to publish them online.
+
+## Purpose
+
+This project serves as a simple wireframing tool that allows you to:
+
+- Create basic wireframes for proposed features
+- Run the application locally (not published online)
+- Screen record the wireframes to share with clients
+- Demonstrate how features work conceptually
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm (v6 or higher)
+
+### Installation
+
+1. Clone this repository
+2. Install dependencies:
+
+```bash
+cd therapios-wireframes
+npm install
+```
+
+3. Start the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Open [http://localhost:3000](http://localhost:3000) in your browser to see the wireframing tool.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `src/components/`: Reusable wireframe components
+- `src/app/wireframes/`: Individual wireframe examples
+- `src/app/`: Main application code
 
-## Learn More
+## Available Components
 
-To learn more about Next.js, take a look at the following resources:
+The project includes several pre-built wireframe components:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `WireframeLayout`: Page layout with optional sidebar
+- `WireframeBox`: Simple content box with label
+- `WireframeImage`: Image placeholder
+- `WireframeFormControl`: Various form controls (text, select, checkbox, etc.)
+- `WireframeButton`: Button component with different variants
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Creating New Wireframes
 
-## Deploy on Vercel
+To create a new wireframe:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Create a new directory under `src/app/wireframes/` with a descriptive name
+2. Create a `page.tsx` file in the new directory
+3. Use the existing wireframe components to build your mockup
+4. Add your new wireframe to the list in `src/app/wireframes/page.tsx`
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Usage Tips
+
+- Use screen recording software to capture wireframe demonstrations
+- Focus on functionality rather than aesthetics
+- Use annotations and comments to explain features
+- Add simple interactions to demonstrate user flows
+
+## License
+
+MIT

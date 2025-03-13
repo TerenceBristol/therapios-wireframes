@@ -3,6 +3,13 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --therapios-primary: #0f2c59;
+  --therapios-secondary: #f5f7fa;
+  --therapios-accent: #4d7cc7;
+  --therapios-border: #c0c7d0;
+  --therapios-hover: #f3f4f6;
+  --therapios-text: #333333;
+  --therapios-text-secondary: #555555;
 }
 
 @theme inline {
@@ -21,6 +28,148 @@
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: var(--therapios-text);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.therapios-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.therapios-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--therapios-border);
+  color: var(--therapios-text);
+}
+
+.therapios-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--therapios-border);
+  color: var(--therapios-text);
+}
+
+.therapios-table tr:nth-child(even) {
+  background-color: var(--therapios-secondary);
+}
+
+.therapios-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* Wireframe specific styles */
+.wireframe-container {
+  border: 2px solid #333;
+  font-family: monospace;
+  color: #000;
+}
+
+.wireframe-bordered {
+  border: 2px solid #333;
+}
+
+/* Interactive elements */
+.interactive-item {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.interactive-item:hover {
+  background-color: rgba(79, 124, 199, 0.1);
+}
+
+.wireframe-notification {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.wireframe-notification:hover {
+  background-color: rgba(255, 193, 7, 0.1);
+}
+
+.filter-button {
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.filter-button:hover {
+  background-color: rgba(79, 124, 199, 0.1);
+}
+
+.filter-button.active {
+  background-color: #eef2ff;
+  border-color: #4f7cc7;
+}
+
+/* Animation for expandable sections */
+.expandable {
+  overflow: hidden;
+  transition: max-height 0.3s ease-in-out;
+}
+
+/* Request button styles */
+.request-button {
+  cursor: pointer;
+  font-weight: bold;
+  transition: all 0.2s ease-in-out;
+}
+
+.request-button:hover {
+  color: #0f2c59;
+}
+
+/* Notification panel patient list */
+.notification-panel-list {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.notification-panel-list th {
+  text-align: left;
+  padding: 0.5rem;
+  font-weight: bold;
+  border-bottom: 2px solid #333;
+}
+
+.notification-panel-list td {
+  padding: 0.5rem;
+  border-bottom: 1px solid #999;
+}
+
+.notification-panel-list tr:last-child td {
+  border-bottom: none;
+}
+
+/* Toast animation */
+@keyframes fade-in-slide {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in-slide 0.3s ease-out forwards;
+}
+
+/* View request link */
+.view-link {
+  color: #0f2c59;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.view-link:hover {
+  color: #4d7cc7;
 }
