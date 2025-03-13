@@ -20,7 +20,18 @@ type Patient = {
   session?: string;
   notes?: string;
   startTime?: string;
+  endTime?: string;
   treated?: boolean;
+  treatmentHistory?: TreatmentEntry[];
+};
+
+// Type for a treatment history entry
+type TreatmentEntry = {
+  date: string;
+  startTime?: string;
+  endTime?: string;
+  notes?: string;
+  session?: string;
 };
 
 // Auto-resizing textarea component
@@ -56,9 +67,13 @@ const AutoResizeTextarea = ({ value, onChange, placeholder, className }: {
 export default function TreatmentDocumentationWireframe() {
   // State for modals
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSuggestionsModalOpen, setIsSuggestionsModalOpen] = useState(false);
   const [currentPatientId, setCurrentPatientId] = useState<number | null>(null);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isDocumentationModalOpen, setIsDocumentationModalOpen] = useState(false);
+  const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
+  
+  // State to track which patients' suggestions are visible (now an array)
+  const [visibleSuggestions, setVisibleSuggestions] = useState<number[]>([]);
   
   const [treatmentDate, setTreatmentDate] = useState('01.07.2025');
   const [modalPatients, setModalPatients] = useState<Patient[]>([]);
@@ -126,7 +141,6 @@ export default function TreatmentDocumentationWireframe() {
       prescription: '399-17', 
       status: '/', 
       doctor: 'Niedeggen',
-      selected: true,
       session: '4/10',
       notes: 'Standard Physiotherapy session completed.'
     },
@@ -151,7 +165,6 @@ export default function TreatmentDocumentationWireframe() {
       prescription: '388-20', 
       status: '/', 
       doctor: 'Niedeggen',
-      selected: true,
       session: '7/10',
       notes: 'Occupational therapy focus on hand exercises.'
     },
@@ -185,41 +198,214 @@ export default function TreatmentDocumentationWireframe() {
     const baseHour = 8;
     const baseMinute = 0;
     
-    return patientsList.map((patient, index) => {
-      // Calculate time increments (20 minutes per patient)
-      const additionalMinutes = index * 20;
-      const totalMinutes = baseMinute + additionalMinutes;
+    // Generate times with each appointment starting right after the previous one
+    return patientsList.reduce((acc: Patient[], patient, index) => {
+      // For the first patient, use the base time
+      if (index === 0) {
+        const startHour = baseHour;
+        const startMinute = baseMinute;
+        
+        // Calculate end time (20 minutes after start time)
+        const endMinutes = startMinute + 20;
+        const endHour = startHour + Math.floor(endMinutes / 60);
+        const endMinute = endMinutes % 60;
+        
+        // Format start time
+        const startAmPm = startHour >= 12 ? 'PM' : 'AM';
+        const formattedStartHour = startHour % 12 || 12;
+        const formattedStartMinute = startMinute.toString().padStart(2, '0');
+        const startTime = `${formattedStartHour}:${formattedStartMinute} ${startAmPm}`;
+        
+        // Format end time
+        const endAmPm = endHour >= 12 ? 'PM' : 'AM';
+        const formattedEndHour = endHour % 12 || 12;
+        const formattedEndMinute = endMinute.toString().padStart(2, '0');
+        const endTime = `${formattedEndHour}:${formattedEndMinute} ${endAmPm}`;
+        
+        // Ensure patient has notes
+        const notes = patient.notes || getRandomNote();
+        
+        acc.push({ ...patient, startTime, endTime, notes });
+      } else {
+        // For subsequent patients, use the end time of the previous patient as their start time
+        const prevPatient = acc[index - 1];
+        
+        // Parse previous patient's end time
+        const [prevEndTimeStr, prevAmPm] = prevPatient.endTime!.split(' ');
+        const [prevEndHourStr, prevEndMinuteStr] = prevEndTimeStr.split(':');
+        let prevEndHour = parseInt(prevEndHourStr);
+        if (prevAmPm === 'PM' && prevEndHour !== 12) prevEndHour += 12;
+        if (prevAmPm === 'AM' && prevEndHour === 12) prevEndHour = 0;
+        const prevEndMinute = parseInt(prevEndMinuteStr);
+        
+        // Set start time to previous patient's end time
+        const startHour = prevEndHour;
+        const startMinute = prevEndMinute;
+        
+        // Calculate end time (20 minutes after start time)
+        const endMinutes = startMinute + 20;
+        const endHour = startHour + Math.floor(endMinutes / 60);
+        const endMinute = endMinutes % 60;
+        
+        // Format start time
+        const startAmPm = startHour >= 12 ? 'PM' : 'AM';
+        const formattedStartHour = startHour % 12 || 12;
+        const formattedStartMinute = startMinute.toString().padStart(2, '0');
+        const startTime = `${formattedStartHour}:${formattedStartMinute} ${startAmPm}`;
+        
+        // Format end time
+        const endAmPm = endHour >= 12 ? 'PM' : 'AM';
+        const formattedEndHour = endHour % 12 || 12;
+        const formattedEndMinute = endMinute.toString().padStart(2, '0');
+        const endTime = `${formattedEndHour}:${formattedEndMinute} ${endAmPm}`;
+        
+        // Ensure patient has notes
+        const notes = patient.notes || getRandomNote();
+        
+        acc.push({ ...patient, startTime, endTime, notes });
+      }
       
-      // Calculate hours and minutes
-      const hours = baseHour + Math.floor(totalMinutes / 60);
-      const minutes = totalMinutes % 60;
-      
-      // Format the time as HH:MM AM
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      const formattedHours = hours % 12 || 12; // Convert 0 to 12 for 12 AM
-      const formattedMinutes = minutes.toString().padStart(2, '0');
-      const startTime = `${formattedHours}:${formattedMinutes} ${ampm}`;
-      
-      // Ensure each patient has notes (use existing or add a new random one)
-      const notes = patient.notes || getRandomNote();
-      
-      return { ...patient, startTime, notes };
-    });
+      return acc;
+    }, []);
   };
 
   // Function to update modal patients when the modal opens
   useEffect(() => {
     if (isModalOpen) {
       const selected = patients.filter(patient => patient.selected);
-      setModalPatients(generateStartTimes(selected));
+      const newModalPatients = generateStartTimes(selected);
+      setModalPatients(newModalPatients);
+      
+      // Automatically show suggestions for all patients when the modal opens
+      setVisibleSuggestions(newModalPatients.map(patient => patient.id));
+    } else {
+      // Clear visible suggestions when the modal closes
+      setVisibleSuggestions([]);
     }
   }, [isModalOpen, patients]);
 
   // Function to handle start time changes
   const handleStartTimeChange = (id: number, startTime: string) => {
-    setModalPatients(modalPatients.map(patient => 
-      patient.id === id ? { ...patient, startTime } : patient
-    ));
+    // Find the index of the patient in modalPatients
+    const patientIndex = modalPatients.findIndex(p => p.id === id);
+    if (patientIndex === -1) return;
+    
+    // Create a new array with updated patient data
+    const updatedPatients = [...modalPatients];
+    
+    // Parse the new start time
+    const [timeStr, amPm] = startTime.split(' ');
+    const [hourStr, minuteStr] = timeStr.split(':');
+    let startHour = parseInt(hourStr);
+    if (amPm === 'PM' && startHour !== 12) startHour += 12;
+    if (amPm === 'AM' && startHour === 12) startHour = 0;
+    const startMinute = parseInt(minuteStr);
+    
+    // Calculate new end time (20 minutes after start time)
+    const endMinutes = startMinute + 20;
+    const endHour = startHour + Math.floor(endMinutes / 60);
+    const endMinute = endMinutes % 60;
+    
+    // Format end time
+    const endAmPm = endHour >= 12 ? 'PM' : 'AM';
+    const formattedEndHour = endHour % 12 || 12;
+    const formattedEndMinute = endMinute.toString().padStart(2, '0');
+    const endTime = `${formattedEndHour}:${formattedEndMinute} ${endAmPm}`;
+    
+    // Update the current patient
+    updatedPatients[patientIndex] = { 
+      ...updatedPatients[patientIndex], 
+      startTime, 
+      endTime 
+    };
+    
+    // Update all subsequent patients' times
+    for (let i = patientIndex + 1; i < updatedPatients.length; i++) {
+      const prevPatient = updatedPatients[i - 1];
+      
+      // The previous patient's end time becomes this patient's start time
+      const newStartTime = prevPatient.endTime;
+      
+      // Parse the new start time
+      const [newTimeStr, newAmPm] = newStartTime!.split(' ');
+      const [newHourStr, newMinuteStr] = newTimeStr.split(':');
+      let newStartHour = parseInt(newHourStr);
+      if (newAmPm === 'PM' && newStartHour !== 12) newStartHour += 12;
+      if (newAmPm === 'AM' && newStartHour === 12) newStartHour = 0;
+      const newStartMinute = parseInt(newMinuteStr);
+      
+      // Calculate new end time (20 minutes after start time)
+      const newEndMinutes = newStartMinute + 20;
+      const newEndHour = newStartHour + Math.floor(newEndMinutes / 60);
+      const newEndMinute = newEndMinutes % 60;
+      
+      // Format end time
+      const newEndAmPm = newEndHour >= 12 ? 'PM' : 'AM';
+      const formattedNewEndHour = newEndHour % 12 || 12;
+      const formattedNewEndMinute = newEndMinute.toString().padStart(2, '0');
+      const newEndTime = `${formattedNewEndHour}:${formattedNewEndMinute} ${newEndAmPm}`;
+      
+      // Update this patient
+      updatedPatients[i] = { 
+        ...updatedPatients[i], 
+        startTime: newStartTime,
+        endTime: newEndTime
+      };
+    }
+    
+    setModalPatients(updatedPatients);
+  };
+
+  // Function to handle end time changes
+  const handleEndTimeChange = (id: number, endTime: string) => {
+    // Find the index of the patient in modalPatients
+    const patientIndex = modalPatients.findIndex(p => p.id === id);
+    if (patientIndex === -1) return;
+    
+    // Create a new array with updated patient data
+    const updatedPatients = [...modalPatients];
+    
+    // Update the current patient's end time
+    updatedPatients[patientIndex] = { 
+      ...updatedPatients[patientIndex], 
+      endTime 
+    };
+    
+    // Update all subsequent patients' times
+    for (let i = patientIndex + 1; i < updatedPatients.length; i++) {
+      const prevPatient = updatedPatients[i - 1];
+      
+      // The previous patient's end time becomes this patient's start time
+      const newStartTime = prevPatient.endTime;
+      
+      // Parse the new start time
+      const [newTimeStr, newAmPm] = newStartTime!.split(' ');
+      const [newHourStr, newMinuteStr] = newTimeStr.split(':');
+      let newStartHour = parseInt(newHourStr);
+      if (newAmPm === 'PM' && newStartHour !== 12) newStartHour += 12;
+      if (newAmPm === 'AM' && newStartHour === 12) newStartHour = 0;
+      const newStartMinute = parseInt(newMinuteStr);
+      
+      // Calculate new end time (20 minutes after start time)
+      const newEndMinutes = newStartMinute + 20;
+      const newEndHour = newStartHour + Math.floor(newEndMinutes / 60);
+      const newEndMinute = newEndMinutes % 60;
+      
+      // Format end time
+      const newEndAmPm = newEndHour >= 12 ? 'PM' : 'AM';
+      const formattedNewEndHour = newEndHour % 12 || 12;
+      const formattedNewEndMinute = newEndMinute.toString().padStart(2, '0');
+      const newEndTime = `${formattedNewEndHour}:${formattedNewEndMinute} ${newEndAmPm}`;
+      
+      // Update this patient
+      updatedPatients[i] = { 
+        ...updatedPatients[i], 
+        startTime: newStartTime,
+        endTime: newEndTime
+      };
+    }
+    
+    setModalPatients(updatedPatients);
   };
 
   // Function to toggle patient selection
@@ -234,25 +420,27 @@ export default function TreatmentDocumentationWireframe() {
     console.log(`Selected prescription for patient ${id}`);
   };
 
+  // Function to toggle showing suggestion for a patient
+  const toggleSuggestions = (patientId: number) => {
+    if (visibleSuggestions.includes(patientId)) {
+      setVisibleSuggestions(visibleSuggestions.filter(id => id !== patientId));
+    } else {
+      setVisibleSuggestions([...visibleSuggestions, patientId]);
+    }
+  };
+
+  // Function to select a suggested note
+  const selectSuggestedNote = (patientId: number, note: string) => {
+    updatePatientNotes(patientId, note);
+    // Remove this patient from the visible suggestions
+    setVisibleSuggestions(visibleSuggestions.filter(id => id !== patientId));
+  };
+
   // Function to update patient notes
   const updatePatientNotes = (id: number, notes: string) => {
     setModalPatients(modalPatients.map(patient => 
       patient.id === id ? { ...patient, notes } : patient
     ));
-  };
-
-  // Function to open the suggestions modal
-  const openSuggestionsModal = (patientId: number) => {
-    setCurrentPatientId(patientId);
-    setIsSuggestionsModalOpen(true);
-  };
-
-  // Function to select a suggested note
-  const selectSuggestedNote = (note: string) => {
-    if (currentPatientId !== null) {
-      updatePatientNotes(currentPatientId, note);
-    }
-    setIsSuggestionsModalOpen(false);
   };
 
   // Check if any patient is selected to show the Document Treatment button
@@ -274,14 +462,31 @@ export default function TreatmentDocumentationWireframe() {
         const [day, month, year] = treatmentDate.split('.');
         const formattedDate = `${month}/${day}/${year}`;
         
+        // Create a new treatment entry
+        const newEntry: TreatmentEntry = {
+          date: formattedDate,
+          startTime: modalPatient.startTime,
+          endTime: modalPatient.endTime,
+          notes: modalPatient.notes,
+          session: modalPatient.session || patient.session
+        };
+        
+        // Check if the patient already has a treatment history
+        const treatmentHistory = patient.treatmentHistory || [];
+        
+        // Add the new entry to the history
+        const updatedHistory = [...treatmentHistory, newEntry];
+        
         // Mark the patient as treated and update other fields
         return { 
           ...patient, 
           notes: modalPatient.notes, 
           startTime: modalPatient.startTime,
+          endTime: modalPatient.endTime,
           organizer: 'Treated', // Set organizer to "Treated"
           treated: true, // Flag to highlight the row
-          lastTreatment: formattedDate // Update last treatment date
+          lastTreatment: formattedDate, // Update last treatment date
+          treatmentHistory: updatedHistory
         };
       }
       return patient;
@@ -332,6 +537,12 @@ export default function TreatmentDocumentationWireframe() {
     setDraggedPatientId(null);
   };
 
+  // Function to toggle the documentation view modal
+  const toggleDocumentationModal = (patient: Patient | null) => {
+    setViewingPatient(patient);
+    setIsDocumentationModalOpen(!isDocumentationModalOpen);
+  };
+
   return (
     <WireframeLayout title="Therapios" username="User Therapist" userInitials="UT" showSidebar={false}>
       <div className="max-w-full mx-auto bg-[#f8f9fa] rounded-lg shadow p-4">
@@ -379,7 +590,7 @@ export default function TreatmentDocumentationWireframe() {
           </div>
 
           {/* Table Headers */}
-          <div className="grid grid-cols-8 gap-4 py-3 px-4 bg-gray-100 text-gray-700 font-medium text-sm">
+          <div className="grid grid-cols-9 gap-4 py-3 px-4 bg-gray-100 text-gray-700 font-medium text-sm">
             <div className="col-span-1"></div>
             <div className="col-span-1">Name Patient</div>
             <div className="col-span-1">Facility</div>
@@ -388,13 +599,14 @@ export default function TreatmentDocumentationWireframe() {
             <div className="col-span-1">Organizer</div>
             <div className="col-span-1">Prescription (Current)</div>
             <div className="col-span-1">Doctor</div>
+            <div className="col-span-1">Dokumentation</div>
           </div>
 
           {/* Table Rows */}
           {patients.map((patient) => (
             <div 
               key={patient.id} 
-              className={`grid grid-cols-8 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
+              className={`grid grid-cols-9 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
                 patient.treated ? 'bg-green-50' : patient.selected ? 'bg-blue-50' : ''
               }`}
             >
@@ -429,6 +641,20 @@ export default function TreatmentDocumentationWireframe() {
                 {patient.prescription}
               </div>
               <div className="col-span-1">{patient.doctor}</div>
+              <div className="col-span-1 flex justify-center">
+                {patient.treated && (
+                  <button 
+                    onClick={() => toggleDocumentationModal(patient)}
+                    className="text-blue-600 hover:text-blue-800"
+                    title="View documentation"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -580,6 +806,16 @@ export default function TreatmentDocumentationWireframe() {
                     />
                   </div>
                   
+                  <div className="flex items-center mb-3">
+                    <label className="text-gray-700 font-medium mr-2">End Time:</label>
+                    <input 
+                      type="text"
+                      value={patient.endTime || ''}
+                      onChange={(e) => handleEndTimeChange(patient.id, e.target.value)}
+                      className="border border-gray-300 rounded-md py-1 px-3 w-28"
+                    />
+                  </div>
+                  
                   <div className="flex items-start">
                     <label className="text-gray-700 font-medium mr-2 mt-2">Notes:</label>
                     <div className="flex-grow relative">
@@ -587,17 +823,40 @@ export default function TreatmentDocumentationWireframe() {
                         value={patient.notes || ''}
                         onChange={(e) => updatePatientNotes(patient.id, e.target.value)}
                         placeholder="Enter treatment notes here..."
-                        className="pr-10"
                       />
-                      <button 
-                        onClick={() => openSuggestionsModal(patient.id)}
-                        className="absolute right-2 top-2 text-gray-500 hover:text-gray-700 bg-transparent p-1 rounded"
-                        title="Suggest notes"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                        </svg>
-                      </button>
+                      
+                      {/* Inline Suggested Notes */}
+                      {visibleSuggestions.includes(patient.id) ? (
+                        <div className="mt-2 bg-white border border-gray-200 rounded-md shadow-sm">
+                          <div className="p-2 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                            <p className="text-xs text-gray-600 font-medium">Suggested notes (click to use):</p>
+                            <button 
+                              onClick={() => toggleSuggestions(patient.id)} 
+                              className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              Hide
+                            </button>
+                          </div>
+                          <div className="max-h-32 overflow-y-auto">
+                            {suggestedNotes.map((note, index) => (
+                              <div 
+                                key={index}
+                                onClick={() => selectSuggestedNote(patient.id, note)}
+                                className="p-2 text-sm border-b border-gray-100 hover:bg-blue-50 cursor-pointer"
+                              >
+                                {note}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <button 
+                          onClick={() => toggleSuggestions(patient.id)}
+                          className="mt-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          Show suggested notes
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -623,44 +882,96 @@ export default function TreatmentDocumentationWireframe() {
         </div>
       )}
 
-      {/* Suggested Notes Modal */}
-      {isSuggestionsModalOpen && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
-            <div className="bg-[#2c5282] text-white py-3 px-4 rounded-t-lg flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Suggested Notes</h3>
+      {/* Documentation View Modal (read-only) */}
+      {isDocumentationModalOpen && viewingPatient && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="bg-gray-700 text-white py-3 px-6 rounded-t-lg flex justify-between items-center">
+              <h2 className="text-xl font-semibold">Treatment History - {viewingPatient.name}</h2>
               <button 
-                onClick={() => setIsSuggestionsModalOpen(false)}
+                onClick={() => toggleDocumentationModal(null)}
                 className="text-white hover:text-gray-200"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="p-4">
-              <p className="text-sm text-gray-600 mb-3">Select a suggested note from the options below:</p>
+
+            {/* Modal Body - Scrollable */}
+            <div className="p-4 overflow-y-auto flex-grow">
+              {/* Patient Basic Info */}
+              <div className="mb-4 bg-gray-50 p-3 rounded-md border border-gray-200">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div><span className="font-medium">Patient:</span> {viewingPatient.name}</div>
+                  <div><span className="font-medium">Facility:</span> {viewingPatient.facility}</div>
+                  <div><span className="font-medium">Prescription:</span> {viewingPatient.prescription}</div>
+                  <div><span className="font-medium">Doctor:</span> {viewingPatient.doctor}</div>
+                </div>
+              </div>
               
-              <div className="space-y-3">
-                {suggestedNotes.map((note, index) => (
-                  <div 
-                    key={index}
-                    onClick={() => selectSuggestedNote(note)}
-                    className="p-3 border border-gray-200 rounded-md hover:bg-blue-50 cursor-pointer transition duration-150"
-                  >
-                    <p>{note}</p>
+              {/* Treatment History */}
+              <div className="space-y-3 mt-2">
+                <h3 className="font-medium text-gray-700">Documentation Logs:</h3>
+                
+                {/* If the patient doesn't have a treatment history array yet, show the current treatment */}
+                {(!viewingPatient.treatmentHistory || viewingPatient.treatmentHistory.length === 0) ? (
+                  <div className="border-l-4 border-blue-500 pl-3 py-2 mb-3">
+                    <div className="font-medium text-blue-800 mb-1">{viewingPatient.lastTreatment}</div>
+                    <div className="grid grid-cols-2 gap-2 text-sm mb-2">
+                      {viewingPatient.session && <div><span className="text-gray-600">Session:</span> {viewingPatient.session}</div>}
+                      {viewingPatient.startTime && <div><span className="text-gray-600">Start:</span> {viewingPatient.startTime}</div>}
+                      {viewingPatient.endTime && <div><span className="text-gray-600">End:</span> {viewingPatient.endTime}</div>}
+                    </div>
+                    {viewingPatient.notes && (
+                      <div className="bg-white border border-gray-100 p-2 rounded text-sm mt-1">
+                        {viewingPatient.notes}
+                      </div>
+                    )}
                   </div>
-                ))}
+                ) : (
+                  // Group entries by date
+                  Object.entries(
+                    viewingPatient.treatmentHistory.reduce((acc: {[key: string]: TreatmentEntry[]}, entry) => {
+                      if (!acc[entry.date]) {
+                        acc[entry.date] = [];
+                      }
+                      acc[entry.date].push(entry);
+                      return acc;
+                    }, {})
+                  ).map(([date, entries]) => (
+                    <div key={date} className="mb-4">
+                      <div className="font-medium text-blue-800 border-b border-gray-200 pb-1 mb-2">{date}</div>
+                      <div className="space-y-3 pl-2">
+                        {entries.map((entry, index) => (
+                          <div key={index} className="border-l-2 border-gray-300 pl-3 py-1">
+                            <div className="grid grid-cols-2 gap-2 text-sm mb-1">
+                              {entry.session && <div><span className="text-gray-600">Session:</span> {entry.session}</div>}
+                              {entry.startTime && <div><span className="text-gray-600">Time:</span> {entry.startTime} - {entry.endTime}</div>}
+                            </div>
+                            {entry.notes && (
+                              <div className="bg-white border border-gray-100 p-2 rounded text-sm">
+                                {entry.notes}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
-              
-              <div className="mt-4 flex justify-end">
-                <button 
-                  onClick={() => setIsSuggestionsModalOpen(false)}
-                  className="bg-gray-400 hover:bg-gray-500 text-white py-1.5 px-4 rounded-md text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end p-3 border-t border-gray-200 bg-white rounded-b-lg">
+              <button 
+                onClick={() => toggleDocumentationModal(null)}
+                className="bg-gray-500 hover:bg-gray-600 text-white py-1.5 px-4 text-sm rounded-md"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
