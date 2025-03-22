@@ -23,6 +23,8 @@ type Patient = {
   endTime?: string;
   treated?: boolean;
   treatmentHistory?: TreatmentEntry[];
+  totalTreatments: number;  // Maximum number of treatments prescribed
+  completedTreatments: number;  // Number of treatments completed
 };
 
 // Type for a treatment history entry
@@ -71,6 +73,7 @@ export default function TreatmentDocumentationWireframe() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isDocumentationModalOpen, setIsDocumentationModalOpen] = useState(false);
   const [viewingPatient, setViewingPatient] = useState<Patient | null>(null);
+  const [collapsedCards, setCollapsedCards] = useState<number[]>([]);
   
   // State to track which patients' suggestions are visible (now an array)
   const [visibleSuggestions, setVisibleSuggestions] = useState<number[]>([]);
@@ -142,7 +145,9 @@ export default function TreatmentDocumentationWireframe() {
       status: '/', 
       doctor: 'Niedeggen',
       session: '4/10',
-      notes: 'Standard Physiotherapy session completed.'
+      notes: 'Standard Physiotherapy session completed.',
+      totalTreatments: 15,
+      completedTreatments: 4
     },
     { 
       id: 2, 
@@ -153,7 +158,9 @@ export default function TreatmentDocumentationWireframe() {
       organizer: '', 
       prescription: '402-11', 
       status: '/', 
-      doctor: 'Niedeggen'
+      doctor: 'Niedeggen',
+      totalTreatments: 12,
+      completedTreatments: 0
     },
     { 
       id: 3, 
@@ -166,7 +173,9 @@ export default function TreatmentDocumentationWireframe() {
       status: '/', 
       doctor: 'Niedeggen',
       session: '7/10',
-      notes: 'Occupational therapy focus on hand exercises.'
+      notes: 'Occupational therapy focus on hand exercises.',
+      totalTreatments: 20,
+      completedTreatments: 7
     },
     { 
       id: 4, 
@@ -177,7 +186,9 @@ export default function TreatmentDocumentationWireframe() {
       organizer: '', 
       prescription: '405-09', 
       status: '/', 
-      doctor: 'Niedeggen'
+      doctor: 'Niedeggen',
+      totalTreatments: 10,
+      completedTreatments: 2
     },
     { 
       id: 5, 
@@ -188,7 +199,9 @@ export default function TreatmentDocumentationWireframe() {
       organizer: '', 
       prescription: '397-14', 
       status: '/', 
-      doctor: 'Niedeggen'
+      doctor: 'Niedeggen',
+      totalTreatments: 18,
+      completedTreatments: 5
     }
   ]);
 
@@ -441,6 +454,10 @@ export default function TreatmentDocumentationWireframe() {
     setModalPatients(modalPatients.map(patient => 
       patient.id === id ? { ...patient, notes } : patient
     ));
+    // Hide suggestions when user types
+    if (visibleSuggestions.includes(id)) {
+      setVisibleSuggestions(visibleSuggestions.filter(suggestionId => suggestionId !== id));
+    }
   };
 
   // Check if any patient is selected to show the Document Treatment button
@@ -454,52 +471,47 @@ export default function TreatmentDocumentationWireframe() {
 
   // Function to handle saving the form
   const handleSave = () => {
-    // Update the main patients list with notes from the modal
+    // Update the patients list with the new treatment information
     const updatedPatients = patients.map(patient => {
       const modalPatient = modalPatients.find(mp => mp.id === patient.id);
       if (modalPatient) {
-        // Convert treatment date from DD.MM.YYYY to MM/DD/YYYY format for consistency
-        const [day, month, year] = treatmentDate.split('.');
-        const formattedDate = `${month}/${day}/${year}`;
-        
-        // Create a new treatment entry
-        const newEntry: TreatmentEntry = {
-          date: formattedDate,
-          startTime: modalPatient.startTime,
-          endTime: modalPatient.endTime,
+        const newCompletedTreatments = Math.min(patient.completedTreatments + 1, patient.totalTreatments);
+        return {
+          ...patient,
+          treated: true,
+          lastTreatment: treatmentDate,
           notes: modalPatient.notes,
-          session: modalPatient.session || patient.session
-        };
-        
-        // Check if the patient already has a treatment history
-        const treatmentHistory = patient.treatmentHistory || [];
-        
-        // Add the new entry to the history
-        const updatedHistory = [...treatmentHistory, newEntry];
-        
-        // Mark the patient as treated and update other fields
-        return { 
-          ...patient, 
-          notes: modalPatient.notes, 
           startTime: modalPatient.startTime,
           endTime: modalPatient.endTime,
-          organizer: 'Treated', // Set organizer to "Treated"
-          treated: true, // Flag to highlight the row
-          lastTreatment: formattedDate, // Update last treatment date
-          treatmentHistory: updatedHistory
+          selected: false,
+          completedTreatments: newCompletedTreatments,
+          treatmentHistory: [
+            ...(patient.treatmentHistory || []),
+            {
+              date: treatmentDate,
+              notes: modalPatient.notes,
+              startTime: modalPatient.startTime,
+              endTime: modalPatient.endTime,
+              session: `${newCompletedTreatments}/${patient.totalTreatments}`
+            }
+          ]
         };
       }
       return patient;
     });
-    
+
     setPatients(updatedPatients);
-    console.log('Saving treatment documentation');
-    toggleModal();
+    setModalPatients([]);
+    setIsModalOpen(false);
   };
 
   // Drag & Drop Functions
   const handleDragStart = (patientId: number) => {
     setDraggedPatientId(patientId);
+    // Collapse the card being dragged
+    if (!collapsedCards.includes(patientId)) {
+      setCollapsedCards(prev => [...prev, patientId]);
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -531,9 +543,15 @@ export default function TreatmentDocumentationWireframe() {
 
       // Regenerate start times based on the new order
       const patientsWithNewTimes = generateStartTimes(updatedPatients);
+      
+      // Preserve the collapse state of all cards
       setModalPatients(patientsWithNewTimes);
     }
 
+    setDraggedPatientId(null);
+  };
+
+  const handleDragEnd = () => {
     setDraggedPatientId(null);
   };
 
@@ -541,6 +559,15 @@ export default function TreatmentDocumentationWireframe() {
   const toggleDocumentationModal = (patient: Patient | null) => {
     setViewingPatient(patient);
     setIsDocumentationModalOpen(!isDocumentationModalOpen);
+  };
+
+  // Function to toggle card collapse
+  const toggleCardCollapse = (patientId: number) => {
+    setCollapsedCards(prev => 
+      prev.includes(patientId) 
+        ? prev.filter(id => id !== patientId)
+        : [...prev, patientId]
+    );
   };
 
   return (
@@ -590,7 +617,7 @@ export default function TreatmentDocumentationWireframe() {
           </div>
 
           {/* Table Headers */}
-          <div className="grid grid-cols-9 gap-4 py-3 px-4 bg-gray-100 text-gray-700 font-medium text-sm">
+          <div className="grid grid-cols-10 gap-4 py-3 px-4 bg-gray-100 text-gray-700 font-medium text-sm">
             <div className="col-span-1"></div>
             <div className="col-span-1">Name Patient</div>
             <div className="col-span-1">Facility</div>
@@ -598,6 +625,7 @@ export default function TreatmentDocumentationWireframe() {
             <div className="col-span-1">Frequency WTD</div>
             <div className="col-span-1">Organizer</div>
             <div className="col-span-1">Prescription (Current)</div>
+            <div className="col-span-1">Status VO (#/#)</div>
             <div className="col-span-1">Doctor</div>
             <div className="col-span-1">Dokumentation</div>
           </div>
@@ -606,7 +634,7 @@ export default function TreatmentDocumentationWireframe() {
           {patients.map((patient) => (
             <div 
               key={patient.id} 
-              className={`grid grid-cols-9 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
+              className={`grid grid-cols-10 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
                 patient.treated ? 'bg-green-50' : patient.selected ? 'bg-blue-50' : ''
               }`}
             >
@@ -640,6 +668,11 @@ export default function TreatmentDocumentationWireframe() {
               <div className="col-span-1">
                 {patient.prescription}
               </div>
+              <div className="col-span-1">
+                <span className={`font-medium ${patient.completedTreatments === patient.totalTreatments ? 'text-green-600' : 'text-blue-600'}`}>
+                  {patient.completedTreatments}/{patient.totalTreatments}
+                </span>
+              </div>
               <div className="col-span-1">{patient.doctor}</div>
               <div className="col-span-1 flex justify-center">
                 {patient.treated && (
@@ -665,11 +698,11 @@ export default function TreatmentDocumentationWireframe() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 overflow-hidden">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
             {/* Modal Header */}
-            <div className="bg-[#2c5282] text-white py-4 px-6 rounded-t-lg flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Mark Selected Patients as Treated ({selectedCount})</h2>
+            <div className="bg-white text-gray-800 py-4 px-6 rounded-t-lg flex justify-between items-center border-b">
+              <h2 className="text-xl font-semibold">Mark as Treated ({selectedCount})</h2>
               <button 
                 onClick={toggleModal}
-                className="text-white hover:text-gray-200"
+                className="text-gray-500 hover:text-gray-700"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -680,8 +713,8 @@ export default function TreatmentDocumentationWireframe() {
             {/* Modal Body - Scrollable */}
             <div className="p-6 overflow-y-auto flex-grow">
               {/* Treatment Date with Calendar Icon */}
-              <div className="mb-6 flex items-center">
-                <label className="text-gray-700 text-lg font-medium mr-3">Treatment Date:</label>
+              <div className="mb-6">
+                <label className="text-gray-700 text-sm font-medium mb-2 block">Treatment Date</label>
                 <div className="relative">
                   <input 
                     type="text" 
@@ -769,111 +802,140 @@ export default function TreatmentDocumentationWireframe() {
                 </div>
               </div>
 
-              {/* Patient Cards - Now with drag and drop */}
+              {/* Patient Cards - Now with collapsible functionality and drag-and-drop */}
               {modalPatients.map((patient) => (
                 <div 
                   key={patient.id} 
+                  className={`mb-4 bg-white border border-gray-200 rounded-md shadow-sm overflow-hidden ${
+                    draggedPatientId === patient.id ? 'opacity-50' : ''
+                  }`}
                   draggable
                   onDragStart={() => handleDragStart(patient.id)}
                   onDragOver={handleDragOver}
                   onDrop={() => handleDrop(patient.id)}
-                  className={`mb-4 bg-gray-50 border border-gray-200 rounded-md p-4 ${
-                    draggedPatientId === patient.id ? 'opacity-50' : ''
-                  } cursor-move`}
+                  onDragEnd={handleDragEnd}
                 >
-                  <div className="flex justify-between mb-1">
-                    <div className="flex items-center">
-                      <div className="mr-2">
-                        <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8h16M4 16h16" />
-                        </svg>
-                      </div>
+                  {/* Card Header - Always visible */}
+                  <div 
+                    className="flex justify-between items-center p-4 bg-gray-50 cursor-pointer"
+                    onClick={() => toggleCardCollapse(patient.id)}
+                  >
+                    <div className="flex items-center gap-4">
+                      <svg 
+                        className={`w-5 h-5 transform transition-transform ${collapsedCards.includes(patient.id) ? '' : 'rotate-180'}`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                       <div>
-                        <h3 className="text-lg font-semibold">{patient.name}</h3>
-                        <span className="text-sm text-gray-600">Prescription: {patient.prescription}</span>
+                        <h3 className="font-medium">{patient.name}</h3>
+                        <div className="text-sm text-gray-600">
+                          <span>Prescription {patient.prescription}</span>
+                          <span className="mx-2">•</span>
+                          <span>Treatment {patient.completedTreatments + 1}/{patient.totalTreatments}</span>
+                        </div>
                       </div>
                     </div>
-                    <span className="text-gray-600">Treatment: {patient.session || '1/10'}</span>
                   </div>
-                  
-                  <div className="flex items-center mb-3">
-                    <label className="text-gray-700 font-medium mr-2">Start Time:</label>
-                    <input 
-                      type="text"
-                      value={patient.startTime || ''}
-                      onChange={(e) => handleStartTimeChange(patient.id, e.target.value)}
-                      className="border border-gray-300 rounded-md py-1 px-3 w-28"
-                    />
-                  </div>
-                  
-                  <div className="flex items-center mb-3">
-                    <label className="text-gray-700 font-medium mr-2">End Time:</label>
-                    <input 
-                      type="text"
-                      value={patient.endTime || ''}
-                      onChange={(e) => handleEndTimeChange(patient.id, e.target.value)}
-                      className="border border-gray-300 rounded-md py-1 px-3 w-28"
-                    />
-                  </div>
-                  
-                  <div className="flex items-start">
-                    <label className="text-gray-700 font-medium mr-2 mt-2">Notes:</label>
-                    <div className="flex-grow relative">
-                      <AutoResizeTextarea
-                        value={patient.notes || ''}
-                        onChange={(e) => updatePatientNotes(patient.id, e.target.value)}
-                        placeholder="Enter treatment notes here..."
-                      />
-                      
-                      {/* Inline Suggested Notes */}
-                      {visibleSuggestions.includes(patient.id) ? (
-                        <div className="mt-2 bg-white border border-gray-200 rounded-md shadow-sm">
-                          <div className="p-2 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-                            <p className="text-xs text-gray-600 font-medium">Suggested notes (click to use):</p>
-                            <button 
-                              onClick={() => toggleSuggestions(patient.id)} 
-                              className="text-xs text-gray-500 hover:text-gray-700"
-                            >
-                              Hide
-                            </button>
-                          </div>
-                          <div className="max-h-32 overflow-y-auto">
-                            {suggestedNotes.map((note, index) => (
-                              <div 
-                                key={index}
-                                onClick={() => selectSuggestedNote(patient.id, note)}
-                                className="p-2 text-sm border-b border-gray-100 hover:bg-blue-50 cursor-pointer"
-                              >
-                                {note}
-                              </div>
-                            ))}
-                          </div>
+
+                  {/* Card Content - Collapsible */}
+                  {!collapsedCards.includes(patient.id) && (
+                    <div className="p-4 border-t border-gray-200">
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <label className="text-sm text-gray-600 block mb-1">Start Time</label>
+                          <input 
+                            type="text"
+                            value={patient.startTime || ''}
+                            onChange={(e) => handleStartTimeChange(patient.id, e.target.value)}
+                            className="border border-gray-300 rounded-md py-1.5 px-3 w-full text-sm"
+                            placeholder="8:30 AM"
+                          />
                         </div>
-                      ) : (
-                        <button 
-                          onClick={() => toggleSuggestions(patient.id)}
-                          className="mt-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          Show suggested notes
-                        </button>
-                      )}
+                        <div>
+                          <label className="text-sm text-gray-600 block mb-1">End Time</label>
+                          <input 
+                            type="text"
+                            value={patient.endTime || ''}
+                            onChange={(e) => handleEndTimeChange(patient.id, e.target.value)}
+                            className="border border-gray-300 rounded-md py-1.5 px-3 w-full text-sm"
+                            placeholder="9:00 AM"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label className="text-sm text-gray-600 block mb-1">Notes</label>
+                        <div className="relative">
+                          <AutoResizeTextarea
+                            value={patient.notes || ''}
+                            onChange={(e) => updatePatientNotes(patient.id, e.target.value)}
+                            placeholder="Enter treatment notes here..."
+                            className="text-sm"
+                          />
+                          
+                          {/* Suggested Notes - Updated styling */}
+                          {visibleSuggestions.includes(patient.id) ? (
+                            <div className="mt-2 bg-white border border-gray-200 rounded-md shadow-sm">
+                              <div className="p-2 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                                <p className="text-xs text-gray-600 font-medium">SUGGESTED NOTES (click to use):</p>
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleSuggestions(patient.id);
+                                  }} 
+                                  className="text-xs text-gray-500 hover:text-gray-700"
+                                >
+                                  HIDE
+                                </button>
+                              </div>
+                              <div className="max-h-32 overflow-y-auto">
+                                {suggestedNotes.map((note, index) => (
+                                  <div 
+                                    key={index}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      selectSuggestedNote(patient.id, note);
+                                    }}
+                                    className="p-2 text-sm border-b border-gray-100 hover:bg-blue-50 cursor-pointer"
+                                  >
+                                    {note}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSuggestions(patient.id);
+                              }}
+                              className="mt-1 text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              Show suggested notes
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>
 
-            {/* Modal Footer - Fixed at bottom */}
-            <div className="flex justify-end gap-3 p-4 border-t border-gray-200 bg-white rounded-b-lg">
+            {/* Modal Footer */}
+            <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
               <button 
                 onClick={toggleModal}
-                className="bg-gray-400 hover:bg-gray-500 text-white py-2 px-6 rounded-md"
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleSave}
-                className="bg-[#2c5282] hover:bg-[#3a6eaa] text-white py-2 px-6 rounded-md"
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md text-sm font-medium"
               >
                 Save
               </button>
@@ -887,11 +949,11 @@ export default function TreatmentDocumentationWireframe() {
         <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
             {/* Modal Header */}
-            <div className="bg-gray-700 text-white py-3 px-6 rounded-t-lg flex justify-between items-center">
-              <h2 className="text-xl font-semibold">Treatment History - {viewingPatient.name}</h2>
+            <div className="bg-white text-gray-800 py-4 px-6 rounded-t-lg flex justify-between items-center border-b">
+              <h2 className="text-xl font-semibold">Documentation (Treatment History)</h2>
               <button 
                 onClick={() => toggleDocumentationModal(null)}
-                className="text-white hover:text-gray-200"
+                className="text-gray-500 hover:text-gray-700"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -900,78 +962,81 @@ export default function TreatmentDocumentationWireframe() {
             </div>
 
             {/* Modal Body - Scrollable */}
-            <div className="p-4 overflow-y-auto flex-grow">
-              {/* Patient Basic Info */}
-              <div className="mb-4 bg-gray-50 p-3 rounded-md border border-gray-200">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div><span className="font-medium">Patient:</span> {viewingPatient.name}</div>
-                  <div><span className="font-medium">Facility:</span> {viewingPatient.facility}</div>
-                  <div><span className="font-medium">Prescription:</span> {viewingPatient.prescription}</div>
-                  <div><span className="font-medium">Doctor:</span> {viewingPatient.doctor}</div>
+            <div className="p-6 overflow-y-auto flex-grow">
+              {/* Patient Info Grid */}
+              <div className="grid grid-cols-2 gap-x-12 gap-y-2 mb-6">
+                <div>
+                  <div className="text-sm text-gray-600 mb-1">Patient Name</div>
+                  <div className="font-medium">{viewingPatient.name}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 mb-1">Facility</div>
+                  <div className="font-medium">{viewingPatient.facility}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 mb-1">Prescription</div>
+                  <div className="font-medium">{viewingPatient.prescription}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-600 mb-1">Doctor</div>
+                  <div className="font-medium">{viewingPatient.doctor}</div>
                 </div>
               </div>
-              
-              {/* Treatment History */}
-              <div className="space-y-3 mt-2">
-                <h3 className="font-medium text-gray-700">Documentation Logs:</h3>
-                
-                {/* If the patient doesn't have a treatment history array yet, show the current treatment */}
-                {(!viewingPatient.treatmentHistory || viewingPatient.treatmentHistory.length === 0) ? (
-                  <div className="border-l-4 border-blue-500 pl-3 py-2 mb-3">
-                    <div className="font-medium text-blue-800 mb-1">{viewingPatient.lastTreatment}</div>
-                    <div className="grid grid-cols-2 gap-2 text-sm mb-2">
-                      {viewingPatient.session && <div><span className="text-gray-600">Session:</span> {viewingPatient.session}</div>}
-                      {viewingPatient.startTime && <div><span className="text-gray-600">Start:</span> {viewingPatient.startTime}</div>}
-                      {viewingPatient.endTime && <div><span className="text-gray-600">End:</span> {viewingPatient.endTime}</div>}
-                    </div>
-                    {viewingPatient.notes && (
-                      <div className="bg-white border border-gray-100 p-2 rounded text-sm mt-1">
-                        {viewingPatient.notes}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  // Group entries by date
-                  Object.entries(
-                    viewingPatient.treatmentHistory.reduce((acc: {[key: string]: TreatmentEntry[]}, entry) => {
-                      if (!acc[entry.date]) {
-                        acc[entry.date] = [];
-                      }
-                      acc[entry.date].push(entry);
-                      return acc;
-                    }, {})
-                  ).map(([date, entries]) => (
-                    <div key={date} className="mb-4">
-                      <div className="font-medium text-blue-800 border-b border-gray-200 pb-1 mb-2">{date}</div>
-                      <div className="space-y-3 pl-2">
-                        {entries.map((entry, index) => (
-                          <div key={index} className="border-l-2 border-gray-300 pl-3 py-1">
-                            <div className="grid grid-cols-2 gap-2 text-sm mb-1">
-                              {entry.session && <div><span className="text-gray-600">Session:</span> {entry.session}</div>}
-                              {entry.startTime && <div><span className="text-gray-600">Time:</span> {entry.startTime} - {entry.endTime}</div>}
-                            </div>
-                            {entry.notes && (
-                              <div className="bg-white border border-gray-100 p-2 rounded text-sm">
-                                {entry.notes}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
 
-            {/* Modal Footer */}
-            <div className="flex justify-end p-3 border-t border-gray-200 bg-white rounded-b-lg">
-              <button 
-                onClick={() => toggleDocumentationModal(null)}
-                className="bg-gray-500 hover:bg-gray-600 text-white py-1.5 px-4 text-sm rounded-md"
-              >
-                Close
-              </button>
+              {/* Treatment History Table */}
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                {/* Table Headers */}
+                <div className="grid grid-cols-12 gap-4 py-3 px-4 bg-gray-50 text-sm font-medium text-gray-600">
+                  <div className="col-span-1">Treatment #</div>
+                  <div className="col-span-3">Treatment Date</div>
+                  <div className="col-span-3">Start and End Time</div>
+                  <div className="col-span-5">Notes</div>
+                </div>
+
+                {/* Table Content */}
+                <div className="divide-y divide-gray-200">
+                  {viewingPatient.treatmentHistory ? (
+                    viewingPatient.treatmentHistory.map((entry, index) => (
+                      <div key={index} className="grid grid-cols-12 gap-4 py-3 px-4 text-sm">
+                        <div className="col-span-1">{index + 1}</div>
+                        <div className="col-span-3">{entry.date}</div>
+                        <div className="col-span-3">
+                          {entry.startTime} - {entry.endTime}
+                        </div>
+                        <div className="col-span-5">{entry.notes}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="grid grid-cols-12 gap-4 py-3 px-4 text-sm">
+                      <div className="col-span-1">1</div>
+                      <div className="col-span-3">{viewingPatient.lastTreatment}</div>
+                      <div className="col-span-3">
+                        {viewingPatient.startTime} - {viewingPatient.endTime}
+                      </div>
+                      <div className="col-span-5">{viewingPatient.notes}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Pagination */}
+              <div className="flex justify-end items-center gap-2 mt-4">
+                <button 
+                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 disabled:text-gray-400"
+                  disabled
+                >
+                  Vorige
+                </button>
+                <div className="w-8 h-8 flex items-center justify-center text-sm border border-gray-300 rounded">
+                  1
+                </div>
+                <button 
+                  className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 disabled:text-gray-400"
+                  disabled
+                >
+                  Nächste
+                </button>
+              </div>
             </div>
           </div>
         </div>
