@@ -1,4 +1,7 @@
+"use client"
+
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 type NavbarProps = {
   title?: string;
@@ -11,18 +14,39 @@ const Navbar: React.FC<NavbarProps> = ({
   username = "User Therapist",
   userInitials = "UT"
 }) => {
+  const pathname = usePathname();
+  const isKpiDashboard = pathname === '/wireframes/kpi-dashboard';
+  
   return (
     <nav className="w-full bg-white border-b border-gray-300 p-4 shadow-sm">
       <div className="container mx-auto flex justify-between items-center">
         <div className="flex items-center">
-          <Link href="/" className="flex items-center text-[#0f2c59] font-bold text-xl mr-10">
+          <Link href="/" className="flex items-center text-[#0f2c59] font-bold text-xl mr-6">
             <LogoIcon className="mr-2" />
             {title}
           </Link>
-          <div className="flex space-x-1">
-            <Link href="/wireframes/dashboard" className="px-3 py-1 rounded-md bg-gray-100 text-gray-800 text-sm hover:bg-gray-200">
-              Dashboard
+          {/* Primary Navigation Links */}
+          <div className="flex items-center space-x-4 border-l border-gray-300 pl-6">
+            <Link 
+              href="/wireframes"
+              className={`text-sm font-medium ${pathname.startsWith('/wireframes') ? 'text-blue-600' : 'text-gray-700 hover:text-blue-600'}`}
+            >
+              Wireframes
             </Link>
+            <Link 
+              href="/patients"
+              className={`text-sm font-medium ${pathname.startsWith('/patients') ? 'text-blue-600' : 'text-gray-700 hover:text-blue-600'}`}
+            >
+              Patients
+            </Link>
+            {/* Add other primary links here if needed */}
+          </div>
+          <div className="flex space-x-1 ml-6">
+            {isKpiDashboard && (
+              <Link href="/wireframes/dashboard-data" className="px-3 py-1 rounded-md bg-gray-100 text-gray-800 text-sm hover:bg-gray-200">
+                Sample data (KPI Dashboard)
+              </Link>
+            )}
           </div>
         </div>
         <div className="flex items-center">

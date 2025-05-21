@@ -1,0 +1,1341 @@
+'use client';
+
+import React, { useState } from 'react';
+import WireframeLayout from '@/components/WireframeLayout';
+
+export default function VOOrderingAndLinkingWireframe() {
+  const [dateFilter, setDateFilter] = useState("01.02.2025 - 31.05.2025");
+  const [therapistFilter, setTherapistFilter] = useState("(Select)");
+  const [voStatusFilter, setVoStatusFilter] = useState("VO Status");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showColumns, setShowColumns] = useState(false);
+  const [selectAll, setSelectAll] = useState(false);
+  
+  // New filter state variables
+  const [followUpStatusFilter, setFollowUpStatusFilter] = useState("All VOs");
+  const [doctorFilter, setDoctorFilter] = useState("All Doctors");
+  const [patientFilter, setPatientFilter] = useState("All Patients");
+  const [activeFilters, setActiveFilters] = useState<string[]>([]);
+  
+  // Add activeTab state variable
+  const [activeTab, setActiveTab] = useState("To Order");
+  
+  // Order modal state
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderModalDoctor, setOrderModalDoctor] = useState("");
+  
+  // Add success notification state
+  const [showSuccessNotification, setShowSuccessNotification] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
+
+  // Define follow-up status types
+  const followUpStatusTypes = {
+    READY: 'Ready',
+    OK: 'OK',
+    NEEDS: 'Folge VO bestellen',
+    ORDERED: 'Folge VO bestellt',
+    READY_FU: 'Folge VO erhalten',
+    CLOSED: 'Closed'
+  };
+
+  // Status indicator components
+  const StatusIndicator = ({ type }: { type: string }) => {
+    let bgColor, textColor;
+    let icon = '⚪';
+    
+    switch(type) {
+      case followUpStatusTypes.READY:
+        bgColor = 'bg-gray-100';
+        textColor = 'text-gray-600';
+        icon = '⚪';
+        break;
+      case followUpStatusTypes.OK:
+        bgColor = 'bg-blue-100';
+        textColor = 'text-blue-600';
+        icon = '🔵';
+        break;
+      case followUpStatusTypes.NEEDS:
+        bgColor = 'bg-red-100';
+        textColor = 'text-red-600';
+        icon = '🔴';
+        break;
+      case followUpStatusTypes.ORDERED:
+        bgColor = 'bg-amber-100';
+        textColor = 'text-amber-600';
+        icon = '🟡';
+        break;
+      case followUpStatusTypes.READY_FU:
+        bgColor = 'bg-green-100';
+        textColor = 'text-green-600';
+        icon = '🟢';
+        break;
+      case followUpStatusTypes.CLOSED:
+        bgColor = 'bg-gray-800';
+        textColor = 'text-gray-100';
+        icon = '⚫';
+        break;
+      default:
+        bgColor = 'bg-gray-100';
+        textColor = 'text-gray-600';
+    }
+    
+    return (
+      <div className={`flex items-center px-2 py-1 rounded ${bgColor} ${textColor}`}>
+        <span className="mr-2">{icon}</span>
+        <span className="text-xs font-medium">{type}</span>
+      </div>
+    );
+  };
+  
+  // Sample data for table rows with added follow-up status, previous VO, and next VO
+  const [patients, setPatients] = useState([
+    {
+      id: 1,
+      selected: false,
+      name: "Gundula Achter",
+      geburtsdatum: "19.5.1959",
+      heilmittel: ", KG-H",
+      einrichtung: "Vivantes HSP Haus Ernst Hoppe",
+      therapeut: "A. Rosky",
+      aktVO: "[2322-4]",
+      ausstDatum: "05.02.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.NEEDS,
+      previousVO: "[2322-3]",
+      nextVO: "",
+      arzt: "U. Vivantes Spandau",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 2,
+      selected: false,
+      name: "Anna Achilles",
+      geburtsdatum: "08.09.1963",
+      heilmittel: "KO,",
+      einrichtung: "Prosenio GmbH Villa Vitalis",
+      therapeut: "A. Rosky",
+      aktVO: "[1254-13]",
+      ausstDatum: "28.02.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.ORDERED,
+      previousVO: "[1254-12]",
+      nextVO: "",
+      arzt: "Dr. Witte",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 3,
+      selected: false,
+      name: "Konrad Achilles",
+      geburtsdatum: "16.09.1934",
+      heilmittel: "KO,",
+      einrichtung: "Prosenio GmbH Villa Vitalis",
+      therapeut: "P. Sandra",
+      aktVO: "[3245-2]",
+      ausstDatum: "03.04.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.READY,
+      previousVO: "[3245-1]",
+      nextVO: "",
+      arzt: "Dr. Witte",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 4,
+      selected: false,
+      name: "Beate Adam",
+      geburtsdatum: "26.03.1934",
+      heilmittel: "KG-ZNS,",
+      einrichtung: "Domicil Berlin Hauptbahnhof",
+      therapeut: "A. Rosky",
+      aktVO: "[1132-14]",
+      ausstDatum: "15.04.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.ORDERED,
+      previousVO: "[1132-13]",
+      nextVO: "",
+      arzt: "Dr. B Vongehr",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 5,
+      selected: false,
+      name: "Norbert Adams",
+      geburtsdatum: "24.04.1944",
+      heilmittel: "KG-ZNS, KG-W,",
+      einrichtung: "Seniorenhaus Treptow",
+      therapeut: "P. Sandra",
+      aktVO: "[2334-5]",
+      ausstDatum: "22.04.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.READY_FU,
+      previousVO: "[2334-4]",
+      nextVO: "[2334-6]",
+      arzt: "E. Oezer",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 6,
+      selected: false,
+      name: "Jürgen Adler",
+      geburtsdatum: "12.03.1961",
+      heilmittel: "KO,",
+      einrichtung: "Evang. Seniorenzentrum Kladow",
+      therapeut: "J. Scheffler",
+      aktVO: "[0883-7]",
+      ausstDatum: "19.04.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.OK,
+      previousVO: "[0883-6]",
+      nextVO: "",
+      arzt: "U. Vivantes Spandau",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 7,
+      selected: false,
+      name: "Vera Adler",
+      geburtsdatum: "12.11.1938",
+      heilmittel: "KG-ZNS,",
+      einrichtung: "Seniorenhaus Buchholz",
+      therapeut: "K. Mischke",
+      aktVO: "[1243-11]",
+      ausstDatum: "19.04.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.READY_FU,
+      previousVO: "[1243-10]",
+      nextVO: "[1243-12]",
+      arzt: "K. Seidel",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 8,
+      selected: false,
+      name: "Werner Adler",
+      geburtsdatum: "17.12.1954",
+      heilmittel: "PFB-E-HB,",
+      einrichtung: "WG Balance Rudow",
+      therapeut: "C. Seelig",
+      aktVO: "[1342-13]",
+      ausstDatum: "10.02.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.CLOSED,
+      previousVO: "[1342-12]",
+      nextVO: "[1342-14]",
+      arzt: "D. Kettemann",
+      note: true,
+      status: "Abgeschloss...",
+      statusClass: "bg-green-100 text-green-800"
+    },
+    {
+      id: 9,
+      selected: false,
+      name: "Günter Ahr",
+      geburtsdatum: "26.11.1929",
+      heilmittel: "SPB-E-HB, ,",
+      einrichtung: "Fürsorge im Alter Seniorenwohnpark am See",
+      therapeut: "L. Weiske",
+      aktVO: "[2281-4]",
+      ausstDatum: "10.02.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.CLOSED,
+      previousVO: "[2281-3]",
+      nextVO: "[2281-5]",
+      arzt: "J. Banzhaf",
+      note: true,
+      status: "Abgeschloss...",
+      statusClass: "bg-green-100 text-green-800"
+    },
+    {
+      id: 10,
+      selected: false,
+      name: "Willi Albrecht",
+      geburtsdatum: "27.08.1950",
+      heilmittel: "PFB-E-HB,",
+      einrichtung: "Pflegewohnzentrum Kaulsdorf-Nord",
+      therapeut: "B. Faltings",
+      aktVO: "[1522-10]",
+      ausstDatum: "06.03.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.READY,
+      previousVO: "[1522-9]",
+      nextVO: "",
+      arzt: "S. Fenske",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 11,
+      selected: false,
+      name: "Monika Berger",
+      geburtsdatum: "15.06.1948",
+      heilmittel: "KG-ZNS,",
+      einrichtung: "Seniorenstift Zehlendorf",
+      therapeut: "A. Rosky",
+      aktVO: "[1876-8]",
+      ausstDatum: "12.03.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.NEEDS,
+      previousVO: "[1876-7]",
+      nextVO: "",
+      arzt: "Dr. Schulze",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 12,
+      selected: false,
+      name: "Herbert Fischer",
+      geburtsdatum: "03.02.1952",
+      heilmittel: "KG-H, KG-W,",
+      einrichtung: "Caritas Pflegeheim",
+      therapeut: "P. Sandra",
+      aktVO: "[2145-6]",
+      ausstDatum: "18.03.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.NEEDS,
+      previousVO: "[2145-5]",
+      nextVO: "",
+      arzt: "U. Vivantes Spandau",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 13,
+      selected: false,
+      name: "Helga Schmidt",
+      geburtsdatum: "22.11.1940",
+      heilmittel: "SPB-E-HB,",
+      einrichtung: "Senioren-Residenz Sonnenschein",
+      therapeut: "J. Scheffler",
+      aktVO: "[1634-9]",
+      ausstDatum: "25.03.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.NEEDS,
+      previousVO: "[1634-8]",
+      nextVO: "",
+      arzt: "Dr. B Vongehr",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 14,
+      selected: false,
+      name: "Klaus Weber",
+      geburtsdatum: "14.09.1945",
+      heilmittel: "KO,",
+      einrichtung: "Alloheim Senioren-Residenz",
+      therapeut: "K. Mischke",
+      aktVO: "[1987-11]",
+      ausstDatum: "29.03.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.NEEDS,
+      previousVO: "[1987-10]",
+      nextVO: "",
+      arzt: "Dr. Witte",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    },
+    {
+      id: 15,
+      selected: false,
+      name: "Ingrid Müller",
+      geburtsdatum: "30.07.1938",
+      heilmittel: "KG-H,",
+      einrichtung: "Pro Seniore Residenz",
+      therapeut: "A. Rosky",
+      aktVO: "[2211-7]",
+      ausstDatum: "02.04.2025",
+      voStatus: "0 / 0",
+      followUpStatus: followUpStatusTypes.NEEDS,
+      previousVO: "[2211-6]",
+      nextVO: "",
+      arzt: "K. Seidel",
+      note: true,
+      status: "In Behandlung...",
+      statusClass: "bg-yellow-100 text-yellow-800"
+    }
+  ]);
+
+  // Toggle select all
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.target.checked;
+    setSelectAll(isChecked);
+    setPatients(prevPatients => 
+      prevPatients.map(patient => ({ ...patient, selected: isChecked }))
+    );
+  };
+  
+  // Toggle individual selection
+  const handleSelectRow = (id: number) => {
+    setPatients(prevPatients => {
+      const updatedPatients = prevPatients.map(patient => 
+        patient.id === id ? { ...patient, selected: !patient.selected } : patient
+      );
+      
+      // Check if all patients are selected and update selectAll state
+      const allSelected = updatedPatients.every(patient => patient.selected);
+      setSelectAll(allSelected);
+      
+      return updatedPatients;
+    });
+  };
+
+  // Handle tab change
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    
+    // Reset other filters when changing tabs
+    setFollowUpStatusFilter("All VOs");
+    setActiveFilters(prevFilters => prevFilters.filter(filter => !filter.startsWith('followUpStatus')));
+  };
+
+  // Filter functions
+  const filterPatients = () => {
+    let filteredPatients = [...patients];
+
+    // First, filter by active tab
+    switch (activeTab) {
+      case "To Order":
+        filteredPatients = filteredPatients.filter(patient => 
+          patient.followUpStatus === followUpStatusTypes.NEEDS
+        );
+        break;
+      case "Ordered":
+        filteredPatients = filteredPatients.filter(patient => 
+          patient.followUpStatus === followUpStatusTypes.ORDERED
+        );
+        break;
+      case "Received":
+        filteredPatients = filteredPatients.filter(patient => 
+          patient.followUpStatus === followUpStatusTypes.READY_FU
+        );
+        break;
+      case "All VOs":
+        // No filter, show all patients
+        break;
+    }
+
+    // Filter by follow-up status (if explicitly set)
+    if (followUpStatusFilter !== "All VOs") {
+      switch (followUpStatusFilter) {
+        case "Ready":
+          filteredPatients = filteredPatients.filter(patient => patient.followUpStatus === followUpStatusTypes.READY);
+          break;
+        case "OK":
+          filteredPatients = filteredPatients.filter(patient => patient.followUpStatus === followUpStatusTypes.OK);
+          break;
+        case "Folge VO bestellen":
+          filteredPatients = filteredPatients.filter(patient => patient.followUpStatus === followUpStatusTypes.NEEDS);
+          break;
+        case "Folge VO bestellt":
+          filteredPatients = filteredPatients.filter(patient => patient.followUpStatus === followUpStatusTypes.ORDERED);
+          break;
+        case "Folge VO erhalten":
+          filteredPatients = filteredPatients.filter(patient => patient.followUpStatus === followUpStatusTypes.READY_FU);
+          break;
+        case "Closed":
+          filteredPatients = filteredPatients.filter(patient => patient.followUpStatus === followUpStatusTypes.CLOSED);
+          break;
+      }
+    }
+
+    // Filter by doctor
+    if (doctorFilter !== "All Doctors") {
+      filteredPatients = filteredPatients.filter(patient => patient.arzt === doctorFilter);
+    }
+
+    // Filter by patient name
+    if (patientFilter !== "All Patients") {
+      filteredPatients = filteredPatients.filter(patient => patient.name === patientFilter);
+    }
+
+    // Filter by search term
+    if (searchTerm) {
+      const lowercasedSearchTerm = searchTerm.toLowerCase();
+      filteredPatients = filteredPatients.filter(patient => 
+        patient.name.toLowerCase().includes(lowercasedSearchTerm) ||
+        patient.therapeut.toLowerCase().includes(lowercasedSearchTerm) ||
+        patient.arzt.toLowerCase().includes(lowercasedSearchTerm) ||
+        patient.aktVO.toLowerCase().includes(lowercasedSearchTerm)
+      );
+    }
+
+    return filteredPatients;
+  };
+
+  // Get filtered patients
+  const filteredPatients = filterPatients();
+
+  // Group patients by doctor if in "To Order" tab
+  const patientsByDoctor = React.useMemo(() => {
+    if (activeTab === "To Order" && doctorFilter === "All Doctors") {
+      // Group patients by doctor when no specific doctor is selected
+      const groupedPatients: Record<string, typeof patients> = {};
+      
+      filteredPatients.forEach(patient => {
+        if (!groupedPatients[patient.arzt]) {
+          groupedPatients[patient.arzt] = [];
+        }
+        groupedPatients[patient.arzt].push(patient);
+      });
+      
+      return groupedPatients;
+    }
+    
+    // If a doctor is selected or not in "To Order" tab, don't group
+    return { [doctorFilter]: filteredPatients };
+  }, [filteredPatients, activeTab, doctorFilter]);
+
+  // Calculate counts for tab badges
+  const toOrderCount = patients.filter(patient => patient.followUpStatus === followUpStatusTypes.NEEDS).length;
+  const orderedCount = patients.filter(patient => patient.followUpStatus === followUpStatusTypes.ORDERED).length;
+  const receivedCount = patients.filter(patient => patient.followUpStatus === followUpStatusTypes.READY_FU).length;
+  const allCount = patients.length;
+
+  // Get unique doctors for doctor filter dropdown
+  const uniqueDoctors = Array.from(new Set(patients.map(patient => patient.arzt)))
+    .map(doctor => {
+      const followUpCount = patients.filter(p => p.arzt === doctor && p.followUpStatus === followUpStatusTypes.NEEDS).length;
+      return {
+        name: doctor,
+        count: followUpCount
+      };
+    })
+    .sort((a, b) => b.count - a.count);
+
+  // Get unique patients for patient filter dropdown
+  const uniquePatients = Array.from(new Set(patients.map(patient => patient.name)));
+
+  // Apply a filter and update active filters
+  const applyFilter = (filterType: string, value: string) => {
+    // Update the appropriate filter state
+    switch (filterType) {
+      case 'followUpStatus':
+        setFollowUpStatusFilter(value);
+        break;
+      case 'doctor':
+        setDoctorFilter(value);
+        // Auto-select patients for this doctor when in "To Order" tab
+        if (activeTab === "To Order" && value !== "All Doctors") {
+          autoSelectPatientsByDoctor(value);
+        }
+        break;
+      case 'patient':
+        setPatientFilter(value);
+        break;
+    }
+
+    // Update active filters
+    if (value === "All VOs" || value === "All Doctors" || value === "All Patients") {
+      setActiveFilters(prevFilters => prevFilters.filter(filter => !filter.startsWith(filterType)));
+    } else {
+      setActiveFilters(prevFilters => {
+        const newFilters = prevFilters.filter(filter => !filter.startsWith(filterType));
+        newFilters.push(`${filterType}:${value}`);
+        return newFilters;
+      });
+    }
+  };
+  
+  // Auto-select patients by doctor
+  const autoSelectPatientsByDoctor = (doctorName: string) => {
+    setPatients(prevPatients => {
+      const updatedPatients = prevPatients.map(patient => ({
+        ...patient,
+        selected: patient.arzt === doctorName && 
+                 patient.followUpStatus === followUpStatusTypes.NEEDS
+      }));
+      
+      // Check if any patients are selected and update selectAll state
+      const anySelected = updatedPatients.some(patient => patient.selected);
+      const allSelected = updatedPatients.filter(p => 
+        p.arzt === doctorName && p.followUpStatus === followUpStatusTypes.NEEDS
+      ).every(p => p.selected);
+      
+      setSelectAll(allSelected && anySelected);
+      
+      return updatedPatients;
+    });
+  };
+  
+  // Show success notification
+  const showNotification = (message: string) => {
+    setNotificationMessage(message);
+    setShowSuccessNotification(true);
+    
+    // Auto-hide notification after 5 seconds
+    setTimeout(() => {
+      setShowSuccessNotification(false);
+    }, 5000);
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFollowUpStatusFilter("All VOs");
+    setDoctorFilter("All Doctors");
+    setPatientFilter("All Patients");
+    setActiveFilters([]);
+  };
+
+  return (
+    <WireframeLayout 
+      title="VO Ordering and Linking"
+      username="Super Admin"
+      userInitials="SA"
+      showSidebar={false}
+    >
+      <div className="p-6">
+        {/* Success notification */}
+        {showSuccessNotification && (
+          <div className="fixed top-6 right-6 z-50 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded shadow-lg flex items-center">
+            <svg className="h-5 w-5 text-green-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium">{notificationMessage}</p>
+            </div>
+            <button 
+              onClick={() => setShowSuccessNotification(false)}
+              className="ml-4 text-green-400 hover:text-green-600"
+            >
+              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+        )}
+
+        {/* Header */}
+        <div className="mb-6">
+          <p className="text-gray-700">Hello Super Admin, I hope you have a wonderful day.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard - Verwaltung</h1>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="mb-6">
+          <div className="border-b border-gray-200">
+            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+              {[
+                { name: "To Order", count: toOrderCount, color: "text-red-600 bg-red-100" },
+                { name: "Ordered", count: orderedCount, color: "text-amber-600 bg-amber-100" },
+                { name: "Received", count: receivedCount, color: "text-green-600 bg-green-100" },
+                { name: "All VOs", count: allCount, color: "text-gray-600 bg-gray-100" }
+              ].map((tab) => (
+                <button
+                  key={tab.name}
+                  onClick={() => handleTabChange(tab.name)}
+                  className={`whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === tab.name
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  {tab.name}
+                  {tab.count > 0 && (
+                    <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${tab.color}`}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* Doctor selection - Only show in "To Order" tab */}
+        {activeTab === "To Order" && (
+          <div className="mb-6">
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <h3 className="text-md font-medium text-gray-900 mb-2">Step 1: Select Doctor</h3>
+              <p className="text-sm text-gray-600 mb-3">
+                VOs can only be ordered in bulk if they have the same doctor. Please select a doctor first.
+              </p>
+              <div className="relative">
+                <select 
+                  className="w-full border border-gray-300 rounded-md px-3 py-2 pr-8 appearance-none bg-white"
+                  value={doctorFilter}
+                  onChange={(e) => applyFilter('doctor', e.target.value)}
+                >
+                  <option>All Doctors</option>
+                  {uniqueDoctors.map((doctor, index) => (
+                    <option key={index} value={doctor.name}>
+                      {doctor.name} {doctor.count > 0 ? `(${doctor.count})` : ''}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                  </svg>
+                </div>
+              </div>
+              {doctorFilter !== "All Doctors" && (
+                <div className="mt-2 bg-blue-50 p-2 rounded text-sm text-blue-800">
+                  <div className="font-medium">Doctor selected: {doctorFilter}</div>
+                  <div className="text-xs mt-1">
+                    All eligible patients for this doctor have been automatically selected.
+                    {patients.filter(p => p.arzt === doctorFilter && p.followUpStatus === followUpStatusTypes.NEEDS && p.selected).length > 0 && (
+                      <span> Proceed to Step 2: Review and order the selected VOs using the button at the bottom of the page.</span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Filter controls */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="flex items-center space-x-2">
+              {/* Search box - keep prominent */}
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search by name, VO#, doctor..."
+                  className="pl-10 pr-4 py-2 border border-gray-300 rounded-md w-64"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+                <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
+                  <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 10a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Patient Filter Dropdown */}
+              <div className="relative">
+                <select 
+                  className="border border-gray-300 rounded-md px-3 py-2 pr-8 appearance-none bg-white"
+                  value={patientFilter}
+                  onChange={(e) => applyFilter('patient', e.target.value)}
+                >
+                  <option>All Patients</option>
+                  {uniquePatients.map((patient, index) => (
+                    <option key={index} value={patient}>{patient}</option>
+                  ))}
+                </select>
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Only show doctor filter here if not in "To Order" tab */}
+              {activeTab !== "To Order" && (
+                <div className="relative">
+                  <select 
+                    className="border border-gray-300 rounded-md px-3 py-2 pr-8 appearance-none bg-white"
+                    value={doctorFilter}
+                    onChange={(e) => applyFilter('doctor', e.target.value)}
+                  >
+                    <option>All Doctors</option>
+                    {uniqueDoctors.map((doctor, index) => (
+                      <option key={index} value={doctor.name}>
+                        {doctor.name} {doctor.count > 0 ? `(${doctor.count})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+                </div>
+              )}
+
+              {/* More filters dropdown */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowColumns(!showColumns)}
+                  className="flex items-center space-x-1 bg-white border border-gray-300 rounded-md px-3 py-2 text-sm"
+                >
+                  <span>More Filters</span>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                {showColumns && (
+                  <div className="absolute left-0 mt-2 w-64 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                    <div className="p-4 space-y-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Date Range
+                        </label>
+                        <div className="relative border border-gray-300 rounded-md px-3 py-2 flex items-center">
+                          <span className="text-sm">{dateFilter}</span>
+                          <svg className="w-5 h-5 ml-2 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Therapist
+                        </label>
+                        <select 
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 appearance-none bg-white"
+                          value={therapistFilter}
+                          onChange={(e) => setTherapistFilter(e.target.value)}
+                        >
+                          <option>Therapist: (Select)</option>
+                          <option>A. Rosky</option>
+                          <option>P. Sandra</option>
+                          <option>J. Scheffler</option>
+                          <option>K. Mischke</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Show/Hide Columns
+                        </label>
+                        <div className="space-y-2">
+                          <label className="flex items-center">
+                            <input type="checkbox" className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" defaultChecked />
+                            <span className="ml-2 text-sm text-gray-700">Name</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input type="checkbox" className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" defaultChecked />
+                            <span className="ml-2 text-sm text-gray-700">Heilmittel</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input type="checkbox" className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" defaultChecked />
+                            <span className="ml-2 text-sm text-gray-700">Therapeut</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input type="checkbox" className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" defaultChecked />
+                            <span className="ml-2 text-sm text-gray-700">Doctor</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Table controls */}
+            <div className="flex items-center space-x-2">
+              {activeFilters.length > 0 && (
+                <button 
+                  onClick={clearAllFilters}
+                  className="text-sm text-blue-600 hover:text-blue-800 ml-2"
+                >
+                  Clear all filters
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Active filters */}
+        {activeFilters.length > 0 && (
+          <div className="mb-6 flex items-center">
+            <span className="text-sm text-gray-600 mr-2">Active filters:</span>
+            <div className="flex flex-wrap gap-2">
+              {activeFilters.map((filter, index) => {
+                const [type, value] = filter.split(':');
+                let displayType;
+                switch(type) {
+                  case 'followUpStatus': displayType = 'Status'; break;
+                  case 'doctor': displayType = 'Doctor'; break;
+                  case 'patient': displayType = 'Patient'; break;
+                  default: displayType = type;
+                }
+                
+                return (
+                  <div key={index} className="inline-flex items-center bg-blue-100 text-blue-800 rounded-full px-3 py-1 text-xs">
+                    <span className="font-medium mr-1">{displayType}:</span>
+                    <span>{value}</span>
+                    <button 
+                      onClick={() => {
+                        switch(type) {
+                          case 'followUpStatus': setFollowUpStatusFilter("All VOs"); break;
+                          case 'doctor': setDoctorFilter("All Doctors"); break;
+                          case 'patient': setPatientFilter("All Patients"); break;
+                        }
+                        setActiveFilters(prevFilters => prevFilters.filter(f => f !== filter));
+                      }}
+                      className="ml-1 text-blue-500 hover:text-blue-700"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Data table */}
+        <div className="bg-white rounded-md shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  {/* Only show checkbox column when in To Order tab with doctor selected */}
+                  {activeTab === "To Order" && doctorFilter !== "All Doctors" && (
+                    <th scope="col" className="pl-6 pr-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          checked={selectAll}
+                          onChange={handleSelectAll}
+                        />
+                      </div>
+                    </th>
+                  )}
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Heilmittel
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Therapeut
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Akt. VO#
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ausst. Datum
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    VO Status (#/#)
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Arzt
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Admin status
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Order Status
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Folge VO #
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Logs
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {activeTab === "To Order" && doctorFilter === "All Doctors" ? (
+                  // When no doctor is selected in "To Order" tab, show grouped by doctor with headers
+                  Object.entries(patientsByDoctor).map(([doctor, patients]) => (
+                    <React.Fragment key={doctor}>
+                      {/* Doctor group header */}
+                      <tr 
+                        className="bg-gray-50 hover:bg-gray-100 cursor-pointer"
+                        onClick={() => applyFilter('doctor', doctor)}
+                      >
+                        <td colSpan={12} className="px-6 py-3">
+                          <div className="flex justify-between items-center">
+                            <div className="font-medium text-gray-900">
+                              {doctor} <span className="text-sm text-gray-500">({patients.length} patients)</span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* Patients for this doctor */}
+                      {patients.map((patient) => (
+                        <tr 
+                          key={patient.id} 
+                          className={`hover:bg-gray-50 ${patient.selected ? 'bg-blue-50' : ''}`}
+                          onClick={() => applyFilter('doctor', doctor)}
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{patient.name}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{patient.heilmittel}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{patient.therapeut}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{patient.aktVO}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{patient.ausstDatum}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{patient.voStatus}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">{patient.arzt}</div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className={`inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium ${patient.statusClass}`}>
+                              {patient.status}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <StatusIndicator type={patient.followUpStatus} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {(patient.followUpStatus === followUpStatusTypes.READY_FU || patient.followUpStatus === followUpStatusTypes.CLOSED) ? patient.nextVO : ""}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <button className="text-gray-500 hover:text-gray-700">
+                              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  ))
+                ) : (
+                  // When a specific doctor is selected or not in "To Order" tab, show regular list
+                  filteredPatients.map((patient) => {
+                    // Determine if row should be highlighted (for "To Order" tab with Needs status)
+                    const isHighlightedRow = activeTab === "To Order" && 
+                      patient.followUpStatus === followUpStatusTypes.NEEDS;
+                    
+                    return (
+                      <tr 
+                        key={patient.id} 
+                        className={`
+                          ${patient.selected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'} 
+                          ${isHighlightedRow ? 'border-l-4 border-l-red-400' : ''}
+                        `}
+                      >
+                        {/* Only show checkbox when in To Order tab with doctor selected */}
+                        {activeTab === "To Order" && doctorFilter !== "All Doctors" && (
+                          <td className="pl-6 pr-3 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                checked={patient.selected}
+                                onChange={() => handleSelectRow(patient.id)}
+                              />
+                            </div>
+                          </td>
+                        )}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900">{patient.name}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{patient.heilmittel}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{patient.therapeut}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{patient.aktVO}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{patient.ausstDatum}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{patient.voStatus}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">{patient.arzt}</div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium ${patient.statusClass}`}>
+                            {patient.status}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <StatusIndicator type={patient.followUpStatus} />
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900">
+                            {(patient.followUpStatus === followUpStatusTypes.READY_FU || patient.followUpStatus === followUpStatusTypes.CLOSED) ? patient.nextVO : ""}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          <button className="text-gray-500 hover:text-gray-700">
+                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                              <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="px-6 py-3 flex items-center justify-between border-t border-gray-200">
+            <div className="flex items-center">
+              <span className="text-sm text-gray-700">Rows per page</span>
+              <div className="relative ml-2">
+                <select className="border border-gray-300 rounded-md px-3 py-1 appearance-none pr-8 bg-white">
+                  <option>10</option>
+                  <option>25</option>
+                  <option>50</option>
+                  <option>100</option>
+                </select>
+                <div className="absolute right-2 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                  <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                    <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-700">1-10 of 1602</span>
+              <button className="p-1 rounded-md border border-gray-300">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+              </button>
+              <button className="p-1 rounded-md border border-gray-300">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <button className="p-1 rounded-md border border-gray-300">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+              <button className="p-1 rounded-md border border-gray-300">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Doctor not selected warning */}
+        {activeTab === "To Order" && doctorFilter === "All Doctors" && patients.some(patient => patient.selected) && (
+          <div className="fixed bottom-6 right-6 z-10">
+            <div className="bg-amber-50 border border-amber-200 rounded-md p-4 shadow-lg">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-amber-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-amber-800">Please select a doctor first</h3>
+                  <div className="mt-2 text-sm text-amber-700">
+                    <p>VOs can only be ordered by doctor. Please select a doctor to continue.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Order VOs floating button - only show when items are selected and doctor is selected */}
+        {patients.some(patient => patient.selected) && (activeTab !== "To Order" || (activeTab === "To Order" && doctorFilter !== "All Doctors")) && (
+          <div className="fixed bottom-6 right-6 z-10">
+            <button
+              onClick={() => {
+                setOrderModalDoctor(doctorFilter !== "All Doctors" ? doctorFilter : "");
+                setShowOrderModal(true);
+              }}
+              className="flex items-center px-6 py-3 bg-blue-600 text-white rounded-md shadow-lg hover:bg-blue-700 transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              {activeTab === "To Order" ? "Step 2: Order Selected VOs" : "Order VOs"} ({patients.filter(patient => patient.selected).length})
+            </button>
+          </div>
+        )}
+
+        {/* Order VOs Modal */}
+        {showOrderModal && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Order Follow-up VOs</h3>
+                <button onClick={() => setShowOrderModal(false)} className="text-gray-400 hover:text-gray-500">
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Step indicator */}
+              {activeTab === "To Order" && (
+                <div className="mb-6">
+                  <ol className="flex items-center">
+                    <li className="flex items-center text-blue-600 dark:text-blue-500">
+                      <span className="flex items-center justify-center w-5 h-5 mr-2 text-xs border border-blue-600 rounded-full shrink-0 dark:border-blue-500">
+                        1
+                      </span>
+                      <span className="text-sm font-medium">Select Doctor</span>
+                      <svg className="w-3 h-3 mx-2 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 12 10">
+                        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 5 4 4 6-8"/>
+                      </svg>
+                    </li>
+                    <li className="flex items-center text-blue-600 dark:text-blue-500">
+                      <span className="flex items-center justify-center w-5 h-5 mr-2 text-xs border border-blue-600 rounded-full shrink-0 dark:border-blue-500">
+                        2
+                      </span>
+                      <span className="text-sm font-medium">Select Patients</span>
+                      <svg className="w-3 h-3 mx-2 text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 12 10">
+                        <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="m1 5 4 4 6-8"/>
+                      </svg>
+                    </li>
+                    <li className="flex items-center text-blue-600 dark:text-blue-500">
+                      <span className="flex items-center justify-center w-5 h-5 mr-2 text-xs border border-blue-600 rounded-full shrink-0 dark:border-blue-500">
+                        3
+                      </span>
+                      <span className="text-sm font-medium">Confirm</span>
+                    </li>
+                  </ol>
+                </div>
+              )}
+              
+              <div className="mb-4">
+                <p className="text-sm text-gray-500 mb-4">
+                  You are about to order follow-up VOs for the following patients:
+                </p>
+                <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md divide-y">
+                  {patients.filter(patient => patient.selected).map(patient => (
+                    <div key={patient.id} className="p-3">
+                      <div className="font-medium">{patient.name}</div>
+                      <div className="text-sm text-gray-500 flex justify-between">
+                        <span>Current VO: {patient.aktVO}</span>
+                        <StatusIndicator type={patient.followUpStatus} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
+              {/* Only show doctor field if not in "To Order" tab or if doctor isn't already selected */}
+              {(activeTab !== "To Order" || doctorFilter === "All Doctors") && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Doctor
+                  </label>
+                  <div className="relative">
+                    <select 
+                      className="w-full border border-gray-300 rounded-md px-3 py-2 appearance-none bg-white"
+                      value={orderModalDoctor}
+                      onChange={(e) => setOrderModalDoctor(e.target.value)}
+                    >
+                      <option value="">Select Doctor</option>
+                      {uniqueDoctors.map((doctor, index) => (
+                        <option key={index} value={doctor.name}>{doctor.name}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                      <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Show doctor confirmation when doctor is pre-selected */}
+              {activeTab === "To Order" && doctorFilter !== "All Doctors" && (
+                <div className="mb-4 bg-blue-50 p-3 rounded-md">
+                  <div className="flex items-center">
+                    <svg className="h-5 w-5 text-blue-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    <div>
+                      <span className="text-sm font-medium text-blue-800">Doctor selected:</span>
+                      <span className="ml-1 text-sm text-blue-800">{doctorFilter}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowOrderModal(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    // Use selected doctor from filter if available, otherwise use modal selection
+                    const selectedDoctor = activeTab === "To Order" && doctorFilter !== "All Doctors" 
+                      ? doctorFilter 
+                      : orderModalDoctor;
+                    
+                    // Count selected patients
+                    const selectedPatientCount = patients.filter(patient => patient.selected).length;
+                    
+                    // Update selected patients' status to "Follow-up Ordered"
+                    const updatedPatients = patients.map(patient => {
+                      if (patient.selected) {
+                        return {
+                          ...patient,
+                          followUpStatus: followUpStatusTypes.ORDERED,
+                          selected: false, // Deselect after ordering
+                        };
+                      }
+                      return patient;
+                    });
+                    
+                    setPatients(updatedPatients);
+                    setSelectAll(false);
+                    setShowOrderModal(false);
+                    
+                    // Show success notification
+                    showNotification(`Successfully ordered ${selectedPatientCount} follow-up VOs for Dr. ${selectedDoctor}`);
+                    
+                    // If in "To Order" tab, switch to "Ordered" tab after ordering
+                    if (activeTab === "To Order") {
+                      handleTabChange("Ordered");
+                    }
+                  }}
+                  disabled={!(activeTab === "To Order" && doctorFilter !== "All Doctors") && !orderModalDoctor}
+                  className={`px-4 py-2 rounded-md text-sm font-medium text-white ${
+                    (activeTab === "To Order" && doctorFilter !== "All Doctors") || orderModalDoctor 
+                      ? "bg-blue-600 hover:bg-blue-700" 
+                      : "bg-blue-400 cursor-not-allowed"
+                  }`}
+                >
+                  Submit Order
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </WireframeLayout>
+  );
+} 
