@@ -2495,8 +2495,8 @@ export default function VOSharingWireframe() {
         addToast(message, "info");
       }
       
-      // Switch to active-patients tab after marking patients as treated
-      setActiveTab('active-patients');
+      // Switch to open-prescriptions tab after marking patients as treated
+      setActiveTab('open-prescriptions');
     }
     
     setModalPatients([]);
@@ -3755,7 +3755,8 @@ export default function VOSharingWireframe() {
             </div>
 
             {/* Table Rows - with green background for treated patients */}
-            {(activeTab === 'open-prescriptions' || activeTab === 'shared-prescriptions' ? patients : inactivePatients).map((patient) => (
+            {(activeTab === 'open-prescriptions' || activeTab === 'shared-prescriptions') ? 
+              patients.map((patient) => (
               <div 
                 key={patient.id} 
                 className={`grid grid-cols-12 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
@@ -3796,7 +3797,84 @@ export default function VOSharingWireframe() {
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-300">
                       Abgebrochen
                     </span>
-                  ) : activeTab === 'active-patients' && (patient.voDisplayStatus === 'Aktiv' || !patient.voDisplayStatus) ? (
+                  ) : activeTab === 'open-prescriptions' && (patient.voDisplayStatus === 'Aktiv' || !patient.voDisplayStatus) ? (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-300">
+                      Aktiv
+                    </span>
+                  ) : activeTab === 'inactive-patients' && patient.voDisplayStatus !== 'Abgebrochen' ? (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-300">
+                      Abgerechnet
+                    </span>
+                  ) : null /* Default case */}
+                </div>
+                <div className="col-span-1">
+                  <span className={`font-medium ${patient.completedTreatments === patient.totalTreatments ? 'text-green-600' : 'text-blue-600'}`}>
+                    {patient.completedTreatments}/{patient.totalTreatments}
+                  </span>
+                </div>
+                <div className="col-span-1">{patient.doctor}</div>
+                <div className="col-span-1">
+                  {/* Transfer Status Column - moved to last */}
+                  {patient.transferStatus ? (
+                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                      patient.transferStatus === 'Temporary' 
+                        ? 'bg-orange-100 text-orange-800 border border-orange-300'
+                        : patient.transferStatus === 'Permanent (Pending)'
+                        ? 'bg-yellow-100 text-yellow-800 border border-yellow-300'
+                        : patient.transferStatus === 'Permanent (Confirmed)'
+                        ? 'bg-green-100 text-green-800 border border-green-300'
+                        : ''
+                    }`}>
+                      {patient.transferStatus}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-xs">-</span>
+                  )}
+                </div>
+              </div>
+            )) : 
+            inactivePatients.map((patient) => (
+              <div 
+                key={patient.id} 
+                className={`grid grid-cols-12 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
+                  patient.selected ? 'bg-blue-50' 
+                    : patient.treatmentStatus === "Treated" ? 'bg-green-50' 
+                    : patient.treatmentStatus === "Rejected" ? 'bg-red-50' 
+                    : ''
+                }`}
+              >
+                <div className="col-span-1 flex justify-center">
+                  <input 
+                    type="checkbox" 
+                    checked={patient.selected || false} 
+                    onChange={() => togglePatientSelection(patient.id)}
+                    className="h-5 w-5 text-blue-500 rounded border-gray-300"
+                  />
+                </div>
+                <div className="col-span-1">{patient.name}</div>
+                <div className="col-span-1">{patient.facility}</div>
+                <div className="col-span-1">
+                  <span className={patient.treated ? 'font-bold' : ''}>
+                    {patient.lastTreatment}
+                  </span>
+                </div>
+                <div className="col-span-1">{patient.frequencyWTD}</div>
+                <div className="col-span-1 flex flex-col">
+                  <span>{patient.primaryTherapist}</span>
+                </div>
+                <div className="col-span-1 flex flex-col">
+                  <span>{patient.sharedTherapists.length > 0 ? patient.sharedTherapists.join(', ') : '-'}</span>
+                </div>
+                <div className="col-span-1">
+                  {patient.prescription}
+                </div>
+                <div className="col-span-1">
+                  {/* VO Status Column Updated Logic */}
+                  {(patient.voDisplayStatus === 'Abgebrochen') ? (
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-300">
+                      Abgebrochen
+                    </span>
+                  ) : activeTab === 'open-prescriptions' && (patient.voDisplayStatus === 'Aktiv' || !patient.voDisplayStatus) ? (
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-300">
                       Aktiv
                     </span>
