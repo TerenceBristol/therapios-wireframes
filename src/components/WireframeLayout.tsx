@@ -7,6 +7,11 @@ type WireframeLayoutProps = {
   showSidebar?: boolean;
   username?: string;
   userInitials?: string;
+  customNavItems?: Array<{
+    label: string;
+    href: string;
+    isActive?: boolean;
+  }>;
 };
 
 const WireframeLayout: React.FC<WireframeLayoutProps> = ({ 
@@ -14,11 +19,12 @@ const WireframeLayout: React.FC<WireframeLayoutProps> = ({
   title = "Therapios", 
   showSidebar = false,
   username = "User Therapist",
-  userInitials = "UT"
+  userInitials = "UT",
+  customNavItems
 }) => {
   return (
     <div className="min-h-screen flex flex-col bg-white">
-      <Navbar title={title} username={username} userInitials={userInitials} />
+      <Navbar title={title} username={username} userInitials={userInitials} customNavItems={customNavItems} />
       
       <div className="flex flex-1">
         {showSidebar && (

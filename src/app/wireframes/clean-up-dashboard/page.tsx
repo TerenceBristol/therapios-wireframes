@@ -30,6 +30,12 @@ const calculateExpDatum = (ausstDatum: Date): Date => {
   return addDays(ausstDatum, 28);
 };
 
+// Function to calculate VO expiry date based on treatment count
+const calculateVoExpiryDate = (ausstDatum: Date, behStatusDenominator: number): Date => {
+  const daysToAdd = behStatusDenominator > 6 ? 180 : 90;
+  return addDays(ausstDatum, daysToAdd);
+};
+
 // Function to format Beh. Status
 const formatBehStatus = (num: number, den: number): string => `${num} / ${den}`;
 
@@ -46,10 +52,8 @@ const daysFromNow = (days: number) => addDays(TODAY, days);
 export default function CleanUpDashboardPage() {
   // --- State Hooks ---
   // Dropdown visibility (already exists)
-  const [isEchOpen, setIsEchOpen] = useState(false);
   const [isTherapistOpen, setIsTherapistOpen] = useState(false);
   // Selected filter values
-  const [selectedEch, setSelectedEch] = useState<string | null>(null);
   const [selectedTherapist, setSelectedTherapist] = useState<string | null>(null);
   const [selectedFachbereich, setSelectedFachbereich] = useState<string | null>(null);
   // Active KPI filter
@@ -59,39 +63,41 @@ export default function CleanUpDashboardPage() {
   // Adjusted Ausst. Datum to be relative to the actual TODAY
   // Ensured all entries have a heilmittel value
   const dummyTableData: TableRowData[] = [
-    { voNr: '1101-1', patName: 'Klara Altmann', einrichtung: 'Seniorenresidenz Sonnenschein', therapeut: 'Weber, Laura', ausstDatum: daysAgo(40), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '11.05.1943', heilmittel: 'KG-H', arzt: 'P. Laudahn' }, 
-    { voNr: '1102-3', patName: 'Bernd Greif', einrichtung: 'Pflegeheim Abendrot', therapeut: 'Müller, Anna', ausstDatum: daysAgo(60), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 12, geburtsdatum: '02.03.1955', heilmittel: 'ET-Default', arzt: 'N/A' }, // Updated geburtsdatum
-    { voNr: '2201-2', patName: 'Franz Abitz', einrichtung: 'FSE Pflegeeinrichtung Treptow / Johannisthal', therapeut: 'S. Zeibig', ausstDatum: daysAgo(20), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 20, geburtsdatum: '20.01.1952', heilmittel: 'BO-E-H', arzt: 'M. von Brevern' }, 
-    { voNr: '2202-10', patName: 'Gundula Achter', einrichtung: 'Vivantes HSP Haus Ernst Hoppe', therapeut: 'A. Rosky', ausstDatum: daysAgo(15), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '19.05.1959', heilmittel: 'KG-H', arzt: 'U. Vivantes Spandau' },  
-    { voNr: '2203-5', patName: 'Dieter Vogel', einrichtung: 'Seniorenresidenz Sonnenschein', therapeut: 'Weber, Laura', ausstDatum: daysAgo(25), fachbereich: 'Logopädie', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '15.08.1963', heilmittel: 'Logo-Default', arzt: 'N/A' }, // Updated geburtsdatum   
+    { voNr: '1101-1', patName: 'Klara Altmann', einrichtung: 'Seniorenresidenz Sonnenschein', therapeut: 'Weber, Laura', ausstDatum: daysAgo(85), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 6, geburtsdatum: '11.05.1943', heilmittel: 'KG-H', arzt: 'P. Laudahn' }, // 90-day expiry, close to expiry
+    { voNr: '1102-3', patName: 'Bernd Greif', einrichtung: 'Pflegeheim Abendrot', therapeut: 'Müller, Anna', ausstDatum: daysAgo(60), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 12, geburtsdatum: '02.03.1955', heilmittel: 'ET-Default', arzt: 'N/A' }, 
+    { voNr: '2201-2', patName: 'Franz Abitz', einrichtung: 'FSE Pflegeeinrichtung Treptow / Johannisthal', therapeut: 'S. Zeibig', ausstDatum: daysAgo(170), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 20, geburtsdatum: '20.01.1952', heilmittel: 'BO-E-H', arzt: 'M. von Brevern' }, // 180-day expiry, close to expiry
+    { voNr: '2202-10', patName: 'Gundula Achter', einrichtung: 'Vivantes HSP Haus Ernst Hoppe', therapeut: 'A. Rosky', ausstDatum: daysAgo(80), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 4, geburtsdatum: '19.05.1959', heilmittel: 'KG-H', arzt: 'U. Vivantes Spandau' }, // 90-day expiry, close to expiry 
+    { voNr: '2203-5', patName: 'Dieter Vogel', einrichtung: 'Seniorenresidenz Sonnenschein', therapeut: 'Weber, Laura', ausstDatum: daysAgo(25), fachbereich: 'Logopädie', behStatusNumerator: 0, behStatusDenominator: 5, geburtsdatum: '15.08.1963', heilmittel: 'Logo-Default', arzt: 'N/A' }, // 90-day expiry, not close yet   
     { voNr: '3301-1', patName: 'Ingeborg Achterberg', einrichtung: 'E71 - No name', therapeut: 'P. Sandra', ausstDatum: daysAgo(5), fachbereich: 'Logopädie', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '22.11.1940', heilmittel: 'NOB-E-HB', arzt: 'J. Sloboda' },    
-    { voNr: '3302-8', patName: 'Ingrid Ackermann', einrichtung: 'Alpenland Marzahn', therapeut: 'J. Scheffler', ausstDatum: daysFromNow(10), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '14.11.1932', heilmittel: 'KG-H', arzt: 'S. Dulce 3' },
-    { voNr: '3303-4', patName: 'Elfriede Adam', einrichtung: 'Pflegewohnstift Potsdam Waldstadt', therapeut: 'K. Mischke', ausstDatum: daysFromNow(30), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '03.07.1948', heilmittel: 'ET-Sensory', arzt: 'N/A' },  // Updated geburtsdatum
-    { voNr: '4401-6', patName: 'Walter Ernst', einrichtung: 'Haus Evergreen', therapeut: 'Fischer, Michael', ausstDatum: daysAgo(50), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 8, geburtsdatum: '10.12.1935', heilmittel: 'KG-Atem', arzt: 'N/A' },     // Updated geburtsdatum
-    { voNr: '4402-11', patName: 'Monika Lang', einrichtung: 'Haus Evergreen', therapeut: 'Schmidt, Klaus', ausstDatum: daysAgo(22), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '25.04.1971', heilmittel: 'MT-Extremities', arzt: 'N/A' }, // Updated geburtsdatum
-    { voNr: '4403-7', patName: 'Wolfgang Kurz', einrichtung: null, therapeut: 'Schneider, Sabine', ausstDatum: daysAgo(10), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 8, geburtsdatum: '08.09.1960', heilmittel: 'ET-Motor', arzt: 'N/A' }, // Updated geburtsdatum
-    { voNr: '4404-1', patName: 'Karin Neumann', einrichtung: 'Pflegeheim Abendrot', therapeut: 'Fischer, Michael', ausstDatum: daysFromNow(45), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '12.06.1953', heilmittel: 'KG-ZNS-Bobath', arzt: 'N/A' }, // Updated geburtsdatum
-    { voNr: '5501-9', patName: 'Helmut Schmidt', einrichtung: 'Seniorenresidenz Sonnenschein', therapeut: 'Weber, Laura', ausstDatum: daysAgo(100), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '05.02.1929', heilmittel: 'KG-Default', arzt: 'N/A' }, // Updated geburtsdatum
-    { voNr: '5502-12', patName: 'Ingrid Berger', einrichtung: 'Alpenland Marzahn', therapeut: 'J. Scheffler', ausstDatum: daysAgo(95), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 12, geburtsdatum: '30.11.1938', heilmittel: 'ET-Cognitive', arzt: 'N/A' }, // Updated geburtsdatum
+    { voNr: '3302-8', patName: 'Ingrid Ackermann', einrichtung: 'Alpenland Marzahn', therapeut: 'J. Scheffler', ausstDatum: daysFromNow(10), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 3, geburtsdatum: '14.11.1932', heilmittel: 'KG-H', arzt: 'S. Dulce 3' }, // 90-day expiry, future date
+    { voNr: '3303-4', patName: 'Elfriede Adam', einrichtung: 'Pflegewohnstift Potsdam Waldstadt', therapeut: 'K. Mischke', ausstDatum: daysFromNow(30), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '03.07.1948', heilmittel: 'ET-Sensory', arzt: 'N/A' }, 
+    { voNr: '4401-6', patName: 'Walter Ernst', einrichtung: 'Haus Evergreen', therapeut: 'Fischer, Michael', ausstDatum: daysAgo(50), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 6, geburtsdatum: '10.12.1935', heilmittel: 'KG-Atem', arzt: 'N/A' }, // 90-day expiry, not close yet
+    { voNr: '4402-11', patName: 'Monika Lang', einrichtung: 'Haus Evergreen', therapeut: 'Schmidt, Klaus', ausstDatum: daysAgo(22), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '25.04.1971', heilmittel: 'MT-Extremities', arzt: 'N/A' }, 
+    { voNr: '4403-7', patName: 'Wolfgang Kurz', einrichtung: null, therapeut: 'Schneider, Sabine', ausstDatum: daysAgo(10), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 2, geburtsdatum: '08.09.1960', heilmittel: 'ET-Motor', arzt: 'N/A' }, // 90-day expiry, not close yet
+    { voNr: '4404-1', patName: 'Karin Neumann', einrichtung: 'Pflegeheim Abendrot', therapeut: 'Fischer, Michael', ausstDatum: daysFromNow(45), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '12.06.1953', heilmittel: 'KG-ZNS-Bobath', arzt: 'N/A' }, 
+    { voNr: '5501-9', patName: 'Helmut Schmidt', einrichtung: 'Seniorenresidenz Sonnenschein', therapeut: 'Weber, Laura', ausstDatum: daysAgo(100), fachbereich: 'Physiotherapy', behStatusNumerator: 0, behStatusDenominator: 10, geburtsdatum: '05.02.1929', heilmittel: 'KG-Default', arzt: 'N/A' }, 
+    { voNr: '5502-12', patName: 'Ingrid Berger', einrichtung: 'Alpenland Marzahn', therapeut: 'J. Scheffler', ausstDatum: daysAgo(95), fachbereich: 'Ergotherapie', behStatusNumerator: 0, behStatusDenominator: 12, geburtsdatum: '30.11.1938', heilmittel: 'ET-Cognitive', arzt: 'N/A' }, 
   ];
 
   // --- Dynamically generate filter options --- 
-  const uniqueEchOptions = Array.from(new Set(dummyTableData.map(row => row.einrichtung).filter(Boolean))) as string[];
   const uniqueTherapistOptions = Array.from(new Set(dummyTableData.map(row => row.therapeut)));
   const fachbereichOptions = ['Physiotherapy', 'Ergotherapie', 'Logopädie'];
 
   // --- Filtering Logic --- 
   // 1. Apply dropdown filters first
   let intermediateFilteredData = dummyTableData;
-  if (selectedEch) {
-    intermediateFilteredData = intermediateFilteredData.filter(row => row.einrichtung === selectedEch);
-  }
   if (selectedTherapist) {
     intermediateFilteredData = intermediateFilteredData.filter(row => row.therapeut === selectedTherapist);
   }
   if (selectedFachbereich) {
     intermediateFilteredData = intermediateFilteredData.filter(row => row.fachbereich === selectedFachbereich);
   }
+
+  // Helper function to get VO status
+  const getVoStatus = (index: number) => {
+    const voStatuses = ['Aktiv', 'Bereit', 'Abgerechnet', 'Expired'];
+    return voStatuses[index % 4];
+  };
 
   // 2. Calculate KPI counts based on intermediate data
   const noTreatmentsCount = intermediateFilteredData.filter(row => row.behStatusNumerator === 0).length;
@@ -103,9 +109,18 @@ export default function CleanUpDashboardPage() {
     const isExpiringSoon = !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 14;
     return isExpiringSoon;
   }).length;
-  const expiredCount = intermediateFilteredData.filter(row => {
-    // Validity expired if not started AND Ausst. Datum is before the 90-day threshold (calculated relative to TODAY)
-    return row.behStatusNumerator === 0 && row.ausstDatum < VALIDITY_EXPIRED_DATE_THRESHOLD;
+  const expiredCount = intermediateFilteredData.filter((row, index) => {
+    const voStatus = getVoStatus(dummyTableData.findIndex(originalRow => originalRow.voNr === row.voNr));
+    return voStatus === 'Expired';
+  }).length;
+  const approachingExpiryCount = intermediateFilteredData.filter((row, index) => {
+    const voStatus = getVoStatus(dummyTableData.findIndex(originalRow => originalRow.voNr === row.voNr));
+    const voExpiryDate = calculateVoExpiryDate(row.ausstDatum, row.behStatusDenominator);
+    const daysUntilExpiry = differenceInDays(voExpiryDate, TODAY);
+    
+    return (voStatus === 'Aktiv' || voStatus === 'Bereit') && 
+           daysUntilExpiry >= 0 && 
+           daysUntilExpiry <= 14;
   }).length;
   // vosNotStartedCount is defined after noTreatmentsCount is calculated
   const vosNotStartedCount = noTreatmentsCount; 
@@ -114,7 +129,6 @@ export default function CleanUpDashboardPage() {
   let filteredData = intermediateFilteredData;
   if (activeKpiFilter) {
     switch (activeKpiFilter) {
-      case 'noTreatments':
       case 'vosNotStarted':
         // Use the already calculated condition
         filteredData = filteredData.filter(row => row.behStatusNumerator === 0);
@@ -131,21 +145,29 @@ export default function CleanUpDashboardPage() {
           return !isExpired && daysUntilExpiry >= 0 && daysUntilExpiry <= 14;
         });
         break;
+      case 'approachingExpiry':
+        // Filter by VOs approaching expiry (14 days or less) with status Aktiv or Bereit
+        filteredData = filteredData.filter((row, index) => {
+          const voStatus = getVoStatus(dummyTableData.findIndex(originalRow => originalRow.voNr === row.voNr));
+          const voExpiryDate = calculateVoExpiryDate(row.ausstDatum, row.behStatusDenominator);
+          const daysUntilExpiry = differenceInDays(voExpiryDate, TODAY);
+          
+          return (voStatus === 'Aktiv' || voStatus === 'Bereit') && 
+                 daysUntilExpiry >= 0 && 
+                 daysUntilExpiry <= 14;
+        });
+        break;
       case 'expired':
-         // Updated logic for validity expired filter (uses threshold based on TODAY)
-        filteredData = filteredData.filter(row => {
-          return row.behStatusNumerator === 0 && row.ausstDatum < VALIDITY_EXPIRED_DATE_THRESHOLD;
+         // Filter by VO status "Expired"
+        filteredData = filteredData.filter((row, index) => {
+          const voStatus = getVoStatus(dummyTableData.findIndex(originalRow => originalRow.voNr === row.voNr));
+          return voStatus === 'Expired';
         });
         break;
     }
   }
 
   // --- Event Handlers ---
-  const handleEchSelect = (ech: string | null) => {
-    setSelectedEch(ech);
-    setIsEchOpen(false);
-  };
-
   const handleTherapistSelect = (therapist: string | null) => {
     setSelectedTherapist(therapist);
     setIsTherapistOpen(false);
@@ -161,11 +183,9 @@ export default function CleanUpDashboardPage() {
   };
 
   const handleClearAllFilters = () => {
-    setSelectedEch(null);
     setSelectedTherapist(null);
     setSelectedFachbereich(null);
     setActiveKpiFilter(null);
-    setIsEchOpen(false);
     setIsTherapistOpen(false);
   };
 
@@ -180,14 +200,7 @@ export default function CleanUpDashboardPage() {
       <div className="p-4 bg-white shadow rounded-lg">  {/* Added bg-white and shadow to group KPIs */}
         <h3 className="text-lg font-medium text-gray-700 mb-4">VO Status Overview (KPIs)</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          {/* No Treatments KPI */}
-          <div 
-            onClick={() => handleKpiClick('noTreatments')}
-            className={`border rounded-lg p-4 bg-white shadow-sm cursor-pointer transition-all ${activeKpiFilter === 'noTreatments' ? 'border-blue-500 border-2 ring-2 ring-blue-200' : 'border-gray-300'}`}
-          >
-            <h3 className="text-lg font-medium text-gray-800 mb-2">No/Missing Treatments</h3>
-            <p className="text-3xl font-bold text-[#f0ad4e]">{noTreatmentsCount}</p> {/* Dynamic Count */}
-          </div>
+
           {/* No ECH KPI */}
           <div 
             onClick={() => handleKpiClick('noEch')}
@@ -196,7 +209,15 @@ export default function CleanUpDashboardPage() {
             <h3 className="text-lg font-medium text-gray-800 mb-2">No ECH</h3>
             <p className="text-3xl font-bold text-[#5bc0de]">{noEchCount}</p> {/* Dynamic Count */}
           </div>
-          {/* Expiring VOs KPI */}
+          {/* VOs Not Started KPI - Moved after No ECH */}
+          <div 
+            onClick={() => handleKpiClick('vosNotStarted')}
+            className={`border rounded-lg p-4 bg-white shadow-sm cursor-pointer transition-all ${activeKpiFilter === 'vosNotStarted' ? 'border-blue-500 border-2 ring-2 ring-blue-200' : 'border-gray-300'}`}
+          >
+            <h3 className="text-lg font-medium text-gray-800 mb-2">VOs Not Started</h3>
+            <p className="text-3xl font-bold text-[#777]">{vosNotStartedCount}</p> {/* Dynamic Count */}
+          </div>
+          {/* VOs Approaching Start Deadline KPI */}
           <div 
             onClick={() => handleKpiClick('expiring')}
             className={`relative border rounded-lg p-4 bg-white shadow-sm cursor-pointer transition-all ${activeKpiFilter === 'expiring' ? 'border-blue-500 border-2 ring-2 ring-blue-200' : 'border-gray-300'}`}
@@ -209,7 +230,20 @@ export default function CleanUpDashboardPage() {
             </div>
             <p className="text-3xl font-bold text-[#f0ad4e]">{expiringCount}</p> 
           </div>
-          {/* Expired VOs KPI */}
+          {/* VOs Approaching Expiry KPI - New card */}
+          <div 
+            onClick={() => handleKpiClick('approachingExpiry')}
+            className={`relative border rounded-lg p-4 bg-white shadow-sm cursor-pointer transition-all ${activeKpiFilter === 'approachingExpiry' ? 'border-blue-500 border-2 ring-2 ring-blue-200' : 'border-gray-300'}`}
+          >
+            <div className="flex items-center mb-2">
+              <h3 className="text-lg font-medium text-gray-800 mr-1">VOs Approaching Expiry</h3> 
+              <span title="VOs approaching their expiration date">
+                <Info className="h-4 w-4 text-gray-400 hover:text-gray-600" />
+              </span>
+            </div>
+            <p className="text-3xl font-bold text-[#ff7f50]">{approachingExpiryCount}</p> 
+          </div>
+          {/* VOs Validity Expired KPI */}
           <div 
             onClick={() => handleKpiClick('expired')}
             className={`relative border rounded-lg p-4 bg-white shadow-sm cursor-pointer transition-all ${activeKpiFilter === 'expired' ? 'border-blue-500 border-2 ring-2 ring-blue-200' : 'border-gray-300'}`}
@@ -221,14 +255,6 @@ export default function CleanUpDashboardPage() {
                </span>
             </div>
             <p className="text-3xl font-bold text-[#d9534f]">{expiredCount}</p> 
-          </div>
-          {/* VOs Not Started KPI */}
-          <div 
-            onClick={() => handleKpiClick('vosNotStarted')}
-            className={`border rounded-lg p-4 bg-white shadow-sm cursor-pointer transition-all ${activeKpiFilter === 'vosNotStarted' ? 'border-blue-500 border-2 ring-2 ring-blue-200' : 'border-gray-300'}`}
-          >
-            <h3 className="text-lg font-medium text-gray-800 mb-2">VOs Not Started</h3>
-            <p className="text-3xl font-bold text-[#777]">{vosNotStartedCount}</p> {/* Dynamic Count */}
           </div>
         </div>
       </div>
@@ -264,15 +290,10 @@ export default function CleanUpDashboardPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                {/* Added Checkbox column based on image */}
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">
-                  <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                </th>
+
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Pat. Name {/* <ArrowUpDown size={14} className="inline ml-1" /> */}
                 </th>
-                {/* Added Geburtsdatum based on image - needs data */}
-                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Geburtsdatum</th>
                 {/* Added Heilmittel based on image - needs data */}
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Heilmittel</th>
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -294,6 +315,7 @@ export default function CleanUpDashboardPage() {
                 {/* <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Exp. Datum</th> */}
                 {/* <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Days Left</th> */}
                 <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arzt</th> {/* Added Arzt */}
+                <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VO Status</th>
                 {/* <th scope="col" className="relative px-4 py-3">
                   <span className="sr-only">Actions</span>
                 </th> */}
@@ -305,15 +327,23 @@ export default function CleanUpDashboardPage() {
                 // const daysLeft = differenceInDays(expDatum, new Date());
                 // const statusColor = getStatusColor(expDatum, row.behStatusNumerator > 0, row.ausstDatum);
 
+                // Generate VO Status with color coding
+                const originalIndex = dummyTableData.findIndex(originalRow => originalRow.voNr === row.voNr);
+                const voStatus = getVoStatus(originalIndex);
+                
+                const getStatusColor = (status: string) => {
+                  switch (status) {
+                    case 'Aktiv': return 'bg-green-100 text-green-800';
+                    case 'Bereit': return 'bg-yellow-100 text-yellow-800';
+                    case 'Abgerechnet': return 'bg-blue-100 text-blue-800';
+                    case 'Expired': return 'bg-orange-100 text-orange-800';
+                    default: return 'bg-gray-100 text-gray-800';
+                  }
+                };
+
                 return (
-                  <tr key={`${row.voNr}-${index}`} className="hover:bg-gray-50">
-                    {/* Added Checkbox cell */}
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <input type="checkbox" className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
-                    </td> 
-                    <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{row.patName}</td>
-                    {/* Added Geburtsdatum cell - needs data */}
-                    <td className="px-4 py-3 whitespace-nowrap text-gray-500">{row.geburtsdatum ?? 'N/A'}</td> 
+                  <tr key={`${row.voNr}-${index}`} className="hover:bg-gray-50"> 
+                    <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">{row.patName}</td> 
                     {/* Added Heilmittel cell - needs data */}
                     <td className="px-4 py-3 whitespace-nowrap text-gray-500">{row.heilmittel ?? 'N/A'}</td> 
                     <td className="px-4 py-3 whitespace-nowrap text-gray-500">{row.einrichtung ?? 'N/A'}</td>
@@ -325,6 +355,11 @@ export default function CleanUpDashboardPage() {
                     {/* <td className="px-4 py-3 whitespace-nowrap text-gray-500">{format(expDatum, 'dd.MM.yyyy')}</td> */}                  
                     {/* <td className={`px-4 py-3 whitespace-nowrap font-medium ${statusColor}`}>{daysLeft}</td> */}
                     <td className="px-4 py-3 whitespace-nowrap text-gray-500">{row.arzt ?? 'N/A'}</td> {/* Added Arzt cell - needs data */} 
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(voStatus)}`}>
+                        {voStatus}
+                      </span>
+                    </td>
                     {/* <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <button className="text-blue-600 hover:text-blue-800">Edit</button>
                       <button className="text-red-600 hover:text-red-800 ml-2">Delete</button>
@@ -384,29 +419,7 @@ export default function CleanUpDashboardPage() {
           VO Status <span className="ml-1">▼</span>
         </div>
 
-        {/* ECH Filter */}
-        <div className="relative">
-          <button
-            onClick={() => setIsEchOpen(!isEchOpen)}
-            className="h-10 min-w-[180px] border border-gray-300 rounded bg-white flex items-center justify-between px-3 text-left text-sm text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {selectedEch ?? 'Select ECH...'}
-            <span className="text-xs ml-2">▼</span>
-          </button>
-          {isEchOpen && (
-            <div className="absolute z-20 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
-               <input type="text" placeholder="Search ECH..." className="w-full px-2 py-1 border-b border-gray-200 focus:outline-none text-xs"/>
-               <ul className="overflow-auto py-1 max-h-48">
-                <li onClick={() => handleEchSelect(null)} className="text-gray-500 italic cursor-pointer select-none relative py-1 pl-3 pr-9 hover:bg-gray-100 text-xs">All ECHs</li>
-                {uniqueEchOptions.map(ech => (
-                  <li key={ech} onClick={() => handleEchSelect(ech)} className="text-gray-900 cursor-pointer select-none relative py-1 pl-3 pr-9 hover:bg-gray-100 text-xs">
-                    {ech}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+
 
         {/* Therapist Filter */}
         <div className="relative">

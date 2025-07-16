@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prescription Form</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        
+        .window {
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            max-width: 750px;
+            margin: 0 auto;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .title-bar {
+            background: linear-gradient(to bottom, #f0f0f0, #e0e0e0);
+            border-bottom: 1px solid #ccc;
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 5px 5px 0 0;
+        }
+        
+        .title-text {
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .window-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .control-btn {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #999;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .content {
+            padding: 15px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        
+        .dropdown-area {
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .dropdown {
+            width: 300px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            background: white;
+        }
+        
+        .section {
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            background: #f9f9f9;
+        }
+        
+        .section-header {
+            background: linear-gradient(to bottom, #f0f0f0, #e8e8e8);
+            border-bottom: 1px solid #ddd;
+            padding: 8px 12px;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .section-header:hover {
+            background: linear-gradient(to bottom, #e8e8e8, #d8d8d8);
+        }
+        
+        .expand-icon {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .section-content {
+            padding: 15px;
+            background: white;
+        }
+        
+        .form-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+        }
+        
+        .form-label {
+            font-weight: bold;
+            min-width: 120px;
+        }
+        
+        .date-input {
+            padding: 3px;
+            border: 1px solid #ccc;
+            width: 100px;
+        }
+        
+        .checkbox {
+            margin-right: 5px;
+        }
+        
+        .text-area {
+            width: 100%;
+            height: 80px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            resize: vertical;
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+        }
+        
+        .large-text-area {
+            height: 120px;
+        }
+        
+        .checkbox-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-left: 20px;
+        }
+        
+        .consultation-note {
+            font-size: 10px;
+            color: #666;
+            margin-top: 10px;
+            font-style: italic;
+        }
+        
+        .bottom-bar {
+            background: #f0f0f0;
+            border-top: 1px solid #ccc;
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 5px 15px;
+            border: 1px solid #999;
+            background: #f0f0f0;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        
+        .btn:hover {
+            background: #e0e0e0;
+        }
+        
+        .btn-primary {
+            background: #4a90e2;
+            color: white;
+            border-color: #357abd;
+        }
+        
+        .btn-primary:hover {
+            background: #357abd;
+        }
+    </style>
+</head>
+<body>
+    <div class="window">
+        <div class="title-bar">
+            <div class="title-text">Prescription 2023-1 from 17.12.2024 for Ingeborg Klenke</div>
+            <div class="window-controls">
+                <div class="control-btn">⬜</div>
+                <div class="control-btn">✕</div>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="dropdown-area">
+                <select class="dropdown">
+                    <option>Select area...</option>
+                </select>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span>Treatment Period</span>
+                    <span class="expand-icon">⌄</span>
+                </div>
+                <div class="section-content">
+                    <div class="form-row">
+                        <span class="form-label">Execution</span>
+                        <span>from 31.12.2024 to 25.03.2025</span>
+                    </div>
+                    <div class="form-row">
+                        <input type="checkbox" class="checkbox">
+                        <span>deviating period</span>
+                    </div>
+                    <div class="form-row" style="margin-left: 20px;">
+                        <input type="text" class="date-input" placeholder="">
+                        <span>to</span>
+                        <input type="text" class="date-input" placeholder="">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span>Current Therapy Status (current findings)</span>
+                    <span class="expand-icon">⌄</span>
+                </div>
+                <div class="section-content">
+                    <textarea class="text-area">Mrs. Klenke initially participated somewhat reserved in the therapy, but then became more open and now has much joy.
+We mainly work on concentration, as this is a priority for Mrs. Klenke in the foreground.</textarea>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span>Special features during the treatment course</span>
+                    <span class="expand-icon">⌄</span>
+                </div>
+                <div class="section-content">
+                    <textarea class="text-area large-text-area">Due to a facility change, please send the follow-up prescription to the Pro Seniore Residence at Wukensee.</textarea>
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-header">
+                    <span>Execution/Modification of Treatment</span>
+                    <span class="expand-icon">⌄</span>
+                </div>
+                <div class="section-content">
+                    <div class="form-row">
+                        <input type="checkbox" class="checkbox" checked>
+                        <span style="font-weight: bold;">Treatment according to prescription</span>
+                    </div>
+                    <div style="margin-left: 20px;">
+                        <div class="form-row">
+                            <span class="form-label">Change</span>
+                        </div>
+                        <div class="checkbox-group">
+                            <label>
+                                <input type="checkbox" class="checkbox">
+                                Therapy frequency
+                            </label>
+                            <label>
+                                <input type="checkbox" class="checkbox">
+                                Individual therapy
+                            </label>
+                            <label>
+                                <input type="checkbox" class="checkbox">
+                                Group therapy
+                            </label>
+                        </div>
+                        <div class="consultation-note">
+                            after consultation<br>
+                            with the<br>
+                            prescribing doctor
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bottom-bar">
+            <div>Line break: [Alt] + [Enter] - Select text modules: [F2]</div>
+            <div class="button-group">
+                <button class="btn">Copy from ...</button>
+                <button class="btn btn-primary">OK</button>
+                <button class="btn">Cancel</button>
+                <button class="btn">Help</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Therapy Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: Arial, sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        
+        .window-frame {
+            background: white;
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .title-bar {
+            background: linear-gradient(to bottom, #f0f0f0, #e0e0e0);
+            border-bottom: 1px solid #ccc;
+            padding: 8px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+        }
+        
+        .title-text {
+            font-weight: normal;
+        }
+        
+        .window-controls {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .control-btn {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #999;
+            background: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .document {
+            background-color: white;
+            padding: 40px;
+            position: relative;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+        
+        .therapy-type {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .address {
+            font-size: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .contact-info {
+            position: absolute;
+            top: 40px;
+            right: 40px;
+            font-size: 10px;
+            text-align: right;
+        }
+        
+        .date-top {
+            text-align: right;
+            margin-bottom: 30px;
+            font-size: 12px;
+        }
+        
+        .report-title {
+            font-size: 14px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        
+        .patient-info {
+            margin-bottom: 20px;
+        }
+        
+        .patient-details {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        
+        .left-details, .right-details {
+            flex: 1;
+        }
+        
+        .right-details {
+            text-align: right;
+        }
+        
+        .section {
+            margin-bottom: 20px;
+        }
+        
+        .section-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .content-text {
+            text-align: justify;
+            line-height: 1.5;
+        }
+        
+        .diagnosis {
+            margin-bottom: 15px;
+        }
+        
+        .treatment-period {
+            margin-bottom: 15px;
+        }
+        
+        .signature-area {
+            margin-top: 50px;
+            text-align: center;
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 18px;
+        }
+        
+        .toolbar {
+            background: #f0f0f0;
+            border-bottom: 1px solid #ccc;
+            padding: 5px 10px;
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+        
+        .toolbar-btn {
+            background: white;
+            border: 1px solid #999;
+            padding: 2px 8px;
+            font-size: 11px;
+            cursor: pointer;
+        }
+        
+        .blue-button {
+            background: #4a90e2;
+            color: white;
+            border-color: #357abd;
+        }
+    </style>
+</head>
+<body>
+    <div class="window-frame">
+        <div class="title-bar">
+            <div class="title-text">🖼️ Preview</div>
+            <div class="window-controls">
+                <div class="control-btn">-</div>
+                <div class="control-btn">⬜</div>
+                <div class="control-btn">✕</div>
+            </div>
+        </div>
+        
+        <div class="toolbar">
+            <div class="blue-button toolbar-btn">🖼️</div>
+            <div class="toolbar-btn">📄</div>
+            <div class="toolbar-btn">💾</div>
+            <div class="toolbar-btn">🖨️</div>
+            <div class="toolbar-btn">🔍</div>
+            <div class="toolbar-btn">📊</div>
+        </div>
+        
+        <div class="document">
+            <div class="contact-info">
+                info@therapios.de
+            </div>
+            
+            <div class="header">
+                <div class="company-name">Therapios iR1 GmbH</div>
+                <div class="therapy-type">Occupational Therapy</div>
+                <div class="address">
+                    Oderstr. 66<br>
+                    14513 Teltow
+                </div>
+            </div>
+            
+            <div style="margin-bottom: 30px; font-size: 10px;">
+                Therapios iR1 GmbH, Oderstr. 66, 14513 Teltow
+            </div>
+            
+            <div class="patient-details">
+                <div class="left-details">
+                    <strong>To:</strong><br>
+                    Dr. med. Thomas Belian<br>
+                    Mittelstr. 20<br>
+                    D - 15377 Märkische Höhe
+                </div>
+                <div class="right-details">
+                    Doctor's Fax Number:
+                </div>
+            </div>
+            
+            <div class="divider">-</div>
+            
+            <div class="date-top">21. Mai 2025</div>
+            
+            <div class="report-title">
+                Therapy Report to Dr. med. Thomas Belian from 21.05.2025
+            </div>
+            
+            <div class="patient-info">
+                <strong>for the patient:</strong><br>
+                Ingeborg Klenke, born: 10.07.1934<br>
+                Uhlandstr. 18-19<br>
+                10553 Berlin/Tel.<br>
+                Health insurance number, Berlin, Insurance number: 007594905
+            </div>
+            
+            <div class="diagnosis">
+                <strong>Your prescription from 17.12.2024 with diagnosis F03 Non-specified dementia (-).</strong>
+            </div>
+            
+            <div class="treatment-period">
+                <strong>The treatment was conducted from 31.12.2024 to 25.03.2025.</strong>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Current therapy status (current findings)</div>
+                <div class="content-text">
+                    Mrs. Klenke initially participated somewhat reserved in the therapy, but then became more open and now has much joy. We mainly work on concentration, as this is a priority for Mrs. Klenke in the foreground.
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Special features during the treatment course</div>
+                <div class="content-text">
+                    Due to a facility change, please send the follow-up prescription to the Pro Seniore Residence at Wukensee like so:
+                </div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Treatment according to prescription: yes</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Continuation of therapy recommended: yes</div>
+            </div>
+            
+            <div class="section">
+                <div class="section-title">Prognostic assessment:</div>
+                <div class="content-text">
+                    For maintaining the cognitive abilities, an ongoing ergotherapeutic care is recommended.
+                </div>
+            </div>
+            
+            <div class="signature-area">
+                With friendly greetings
+            </div>
+        </div>
+    </div>
+</body>
+</html>

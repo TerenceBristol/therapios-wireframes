@@ -1,0 +1,79 @@
+Kurzzeichen,Bezeichnung,Tar. 1,Tar. 10,Tar. 11,Tar. 12,Duration,Kind,BV,Bereich
+AB-E,Verwaltungsaufwand Arztbericht,"1,11","1,4",0,"1,11",0,fee,FALSE,ERGO
+AB-P,Verwaltungsaufwand Arztbericht,"1,32","1,4",0,"1,32",0,fee,FALSE,PT
+AEB,Analyse des ergotherapeutischen Bedarfs,"38,43","44,2","41,8","38,43",0,passiv,FALSE,ERGO
+BEP-A,Physioth. Bericht auf schriftl. Anf.,"63,5","63,5",0,"63,5",0,fee,FALSE,PT
+BEP-A-BV,Physioth. Bericht auf schriftl. Anf. (BV,"63,5",0,0,"63,5",0,fee,TRUE,PT
+BGM,Bindegewebsmassage,"24,37","24,4",0,"24,37",15,treatment,FALSE,PT
+BGM-BV,Bindegewebsmassage (BV),"24,37",0,0,"24,37",15,treatment,TRUE,PT
+HB-E,Hausbesuch pauschal inkl. Fahrtkosten,"25,54","25,6",24,"25,54",0,fee,FALSE,ERGO
+BO-E-H,Krankengymnastik nach Bobath (Erw.) Heim,"44,15","44,2",50,"44,15",25,treatment,FALSE,PT
+BO-K,Krankengymnastik nach Bobath (Kinder),"55,19","55,2",0,"55,19",25,treatment,FALSE,PT
+HBH-E,"Hausbesuch Heim, je Pat., pauschal","16,66","16,7",24,"16,66",0,fee,FALSE,ERGO
+HB-L,Hausbesuch,"22,38",0,24,"22,38",0,fee,FALSE,SSSST
+HR,Heiße Rolle,"12,63","13,6",0,"12,63",0,treatment,FALSE,PT
+KÄL,Kälteth. bei einem/mehreren Körperteilen,"11,21","12,9",0,"11,21",0,treatment,FALSE,PT
+HB-PT,Hausbesuch pauschal inkl. Fahrtkosten,"21,37","25,6",30,"21,37",0,fee,FALSE,PT
+HBH-PT,"Hausbesuch Heim, je Pat., pauschal","12,28","16,7",24,"12,28",0,fee,FALSE,PT
+HR-H-BV,Heiße Rolle (BV),"12,63",0,0,"12,63",10,treatment,TRUE,PT
+KG-H,"KG, auch auf neurophysiolog. Gr. Heim","27,8","27,8",39,"27,8",20,treatment,FALSE,PT
+KG-H-BV,"KG, auch auf neurophysiolog. Grundl.(BV)","27,8",0,0,"27,8",20,treatment,TRUE,PT
+KG-VID-BV,KG auch auf neurophys.Grund-Video (BV),"27,8",0,0,"27,8",20,treatment,TRUE,PT
+KGM-H,KG Atemtherapie bei Mucoviscidose 60 Min,"83,43","83,5",118,"83,43",60,treatment,FALSE,PT
+KMT-BV,Klassische Massagetherapie (BV),"20,29",0,0,"20,29",15,treatment,TRUE,PT
+KMT-H,Klassische Massagetherapie,"20,29","20,3","28,5","20,29",15,treatment,FALSE,PT
+KOMP,Kompressionsbandagierung,"21,5","21,5","30,3","21,5",0,treatment,FALSE,PT
+KT-H-BV,Kälteth. bei ein/mehr. Körperteilen (BV),"11,21",0,0,"11,21",10,passiv,TRUE,PT
+MFB-2-HB,bei motorischen Störungen (2 Teilnehmer),"42,22","42,3",0,"42,22",40,treatment,FALSE,ERGO
+MFB-E-HB,Einzelbehandl. bei mot. St. (HB),"52,77","52,8","67,79","52,77",40,treatment,FALSE,ERGO
+MFB-G-HB,motorisch-funktionelle Stör. (Gruppe),"18,47","42,3",0,"18,47",40,treatment,FALSE,ERGO
+L-BD,SSSST-Bedarfsdiagnostik,"58,64","58,7","83,37","58,64",0,treatment,FALSE,SSSST
+L-E30H,SSSST Einzelbeh. (30 Min.),"52,12","52,2",74,"52,12",30,treatment,FALSE,SSSST
+L-E45H,SSSST-Einzelbeh. (45 Min.),"71,67","71,7","101,9","71,67",45,treatment,FALSE,SSSST
+L-E60H,SSSST-Einzelbeh. (60 Min.),"91,21","91,3","129,68","91,21",60,treatment,FALSE,SSSST
+NOB-2-HB,Ergotherap. Hirnleistungstraining (2 TN),"42,22","42,3",0,"42,22",30,treatment,FALSE,ERGO
+NOB-E-HB,Ergoth. Hirnleistungstraining (HB),"52,77","52,8","75,14","52,77",30,treatment,FALSE,ERGO
+NOB-G-HB,Hirnleistungstraining im HB,"24,63","24,7",0,"24,63",30,treatment,FALSE,ERGO
+PFB-2-HB,bei psychischen Störungen (2 Teilnehmer),"70,36","70,4",0,"70,36",60,treatment,FALSE,ERGO
+PFB-E-HB,Einzelbehandl. psychisch funktionell,"87,95",88,"104,34","87,95",60,treatment,FALSE,ERGO
+PFB-G-HB,psychisch-funktionelle Störungen (Gr.),"43,1","43,1",0,"43,1",60,treatment,FALSE,ERGO
+L-ED,"SSSST-Erstdiagnostik, 60 Min.","117,27","117,3",150,"117,27",60,treatment,FALSE,SSSST
+SPB-2-HB,sensomotorische/perzeptive Stör. (2 TN),"56,29","56,3",0,"56,29",45,treatment,FALSE,ERGO
+SPB-E-HB,Einzelbeh. sensomotor./perz. Stör. (HB),"70,36","70,4","91,26","70,36",45,treatment,FALSE,ERGO
+SPB-G-HBH,sensomotorisch-perzeptive Stör. (3-6),"24,63","24,7",0,"24,63",45,treatment,FALSE,ERGO
+L-G2-45,Gruppenbeh. 2 TN 45 Min.,"64,5","64,5",0,"64,5",45,treatment,FALSE,SSSST
+L-G2-90,"Gruppenbehandlung, 2 TN, 90 Min.","117,27","117,3",0,"117,27",90,treatment,FALSE,SSSST
+AB-E-BV,Verwaltungsaufwand Arztbericht (BV),"1,11",0,0,"1,11",,,TRUE,ERGO
+AB-P-BV,Verwaltungsaufwand Arztbericht (BV),"1,32",0,0,"1,32",,,TRUE,PT
+AEB-BV,Analyse ergoth. Bedarf (BV),"44,2",0,0,"44,2",,,TRUE,ERGO
+BD-BV,Bedarfsdiagnostik (BV),"25,76","25,8",0,"25,76",,,TRUE,ERGO
+L-G5-45,"Gruppenbehandlung, 3-5 Pat., 45 Min.","32,58","34,6",0,"32,58",45,treatment,FALSE,SSSST
+L-G5-90,"Gruppenbehandlung, 3-5 Pat., 90 Min.","58,64","58,7",0,"58,64",90,treatment,FALSE,SSSST
+HB-E-BV,Hausbesuch inkl. Wegegeld (BV),"25,54",0,0,"25,54",,,TRUE,ERGO
+HB-PT-BV,Hausbesuch pauschal inkl. Fahrtk. (BV),"21,37",0,0,"21,37",,,TRUE,PT
+HBH-E-BV,Hausbesuch im Heim inkl. Wegegeld (BV),"16,66",0,0,"16,66",,,TRUE,ERGO
+HBH-PT-BV,"Hausbesuch Heim, je Pat., pauschal (BV)","12,28",0,0,"12,28",,,TRUE,PT
+HBK-PT-BV,Hausbesuch in Kurzz. und Tagespflege(BV),"21,37",0,0,"21,37",,,TRUE,PT
+HL-BV,"W. m. Glühlicht, Strahler, Heißluft (BV)","6,97",0,0,"6,97",,,TRUE,PT
+MLD30H,Manuelle Lymphdrainage Teilbeh. 30 Min.,"33,75","33,8",47,"33,75",30,treatment,FALSE,PT
+MLD45H,Manuelle Lymphdrainage Großbeh. 45 Min.,"50,6","50,6","71,31","50,6",45,treatment,FALSE,PT
+MLD60H,Manuelle Lymphdrainage Ganzbeh. 60 Min.,"67,48","67,5",95,"67,48",60,treatment,FALSE,PT
+MT-H,Manuelle Therapie (HB),"33,39","33,4",47,"33,39",20,treatment,FALSE,PT
+MT-H-BV,Manuelle Therapie (BV),"33,39",0,0,"33,39",20,treatment,TRUE,PT
+PD-BV,Physiotherapeutische Diagnostik (BV),"34,34","34,4",0,"34,34",20,treatment,TRUE,PT
+MFB-2-H-BV,ZI Mot. fumkt. Beh. 2 Tn,"14,07",0,0,"14,07",15,treatment,TRUE,ERGO
+MFB-G-H-BV,Beh. bei motor. Störungen Gruppe (BV),"6,16",0,0,"6,16",15,treatment,TRUE,ERGO
+MFB-H-BV,ZI Einzelbehandl. bei motor. Störungen,"17,59",0,0,"17,59",15,treatment,TRUE,ERGO
+PNF,Krankengymnastik nach PNF,"44,15","44,2",0,"44,15",20,treatment,FALSE,PT
+SPC-BV,"Segment-, Periost-, Colonmassage (BV)","20,29",0,0,"20,29",20,treatment,TRUE,PT
+NOB-2-H-BV,Hirnleistungstraining 2 TN (BV),"14,07",0,0,"14,07",15,treatment,TRUE,ERGO
+NOB-G-H-BV,Hirnleistungstraining Gruppe (BV),"6,16",0,0,"6,16",15,treatment,TRUE,ERGO
+NOB-H-BV,Ergoth. Hirnleistungstraining (BV),"17,59",0,0,"17,59",15,treatment,TRUE,ERGO
+PFB-2-H-BV,Beh. bei psych. Störungen 2 TN (BV),"14,07",0,0,"14,07",15,treatment,TRUE,ERGO
+PFB-G-H-BV,Beh. bei psych. Störungen Gruppe (BV),"6,16",0,0,"6,16",15,treatment,TRUE,ERGO
+PFB-H-BV,Einzelbeh. bei psych-fkt. Störungen (BV),"17,59",0,0,"17,59",15,treatment,TRUE,ERGO
+VBP-BV-P,Versorgungsbezogene Pauschale (BV),55,"91,38",0,55,0,fee,TRUE,PT
+VO-E,Krankengymnastik nach Vojta (Erw.),"44,15","44,2",0,"44,15",25,treatment,FALSE,PT
+VBP-BV,Versorgungsbezogene Pauschale (BV),"91,38","91,38",0,"91,38",0,fee,TRUE,ERGO
+VO-K,Krankengymnastik nach Vojta (Kinder),"55,19","55,2",0,"55,19",25,treatment,FALSE,PT
+WPN-BV,Warmpackungen einschl. Nachruhe (BV),"15,16",0,0,"15,16",,,TRUE,PT

@@ -18,6 +18,50 @@ const getDaysInMonthFn = (month: number, year: number): number => {
 };
 // --- End Utility Functions ---
 
+// --- Heilmittel Data from CSV (Kind="treatment") ---
+// Regular Heilmittel (BV=FALSE)
+const REGULAR_HEILMITTEL = [
+  'BGM',    // Bindegewebsmassage
+  'HR',     // Heiße Rolle
+  'KÄL',    // Kältetherapie bei einem/mehreren Körperteilen
+  'KG-H',   // KG, auch auf neurophysiolog. Grundlage
+  'KMT-H',  // Klassische Massagetherapie
+  'KOMP',   // Kompressionsbandagierung
+  'MLD30H', // Manuelle Lymphdrainage Teilbehandlung 30 Min
+  'MLD45H', // Manuelle Lymphdrainage Großbehandlung 45 Min
+  'MLD60H', // Manuelle Lymphdrainage Ganzbehandlung 60 Min
+  'MT-H',   // Manuelle Therapie
+  'PNF',    // Krankengymnastik nach PNF
+  'VO-E',   // Krankengymnastik nach Vojta (Erwachsene)
+  'VO-K',   // Krankengymnastik nach Vojta (Kinder)
+  'BO-E-H', // Krankengymnastik nach Bobath (Erwachsene) Heim
+  'BO-K',   // Krankengymnastik nach Bobath (Kinder)
+  'KGM-H',  // KG Atemtherapie bei Mucoviscidose 60 Min
+];
+
+// Blanko VO Heilmittel (BV=TRUE, Bereich=ERGO only)
+const BLANKO_VO_HEILMITTEL = [
+  'AB-E-BV',    // Verwaltungsaufwand Arztbericht (BV)
+  'AEB-BV',     // Analyse ergoth. Bedarf (BV)  
+  'BD-BV',      // Bedarfsdiagnostik (BV)
+  'HB-E-BV',    // Hausbesuch inkl. Wegegeld (BV)
+  'HBH-E-BV',   // Hausbesuch im Heim inkl. Wegegeld (BV)
+  'MFB-2-H-BV', // ZI Mot. fumkt. Beh. 2 Tn
+  'MFB-G-H-BV', // Beh. bei motor. Störungen Gruppe (BV)
+  'MFB-H-BV',   // ZI Einzelbehandl. bei motor. Störungen
+  'NOB-2-H-BV', // Hirnleistungstraining 2 TN (BV)
+  'NOB-G-H-BV', // Hirnleistungstraining Gruppe (BV)
+  'NOB-H-BV',   // Ergoth. Hirnleistungstraining (BV)
+  'PFB-2-H-BV', // Beh. bei psych. Störungen 2 TN (BV)
+  'PFB-G-H-BV', // Beh. bei psych. Störungen Gruppe (BV)
+  'PFB-H-BV',   // Einzelbeh. bei psych-fkt. Störungen (BV)
+  'VBP-BV',     // Versorgungsbezogene Pauschale (BV)
+];
+
+// All treatment Heilmittel combined
+const ALL_TREATMENT_HEILMITTEL = [...REGULAR_HEILMITTEL, ...BLANKO_VO_HEILMITTEL];
+// --- End Heilmittel Data ---
+
 // Define the patient data type
 type Patient = {
   id: number;
@@ -38,12 +82,16 @@ type Patient = {
   totalTreatments: number;  // Maximum number of treatments prescribed
   completedTreatments: number;  // Number of treatments completed
   rejectedTreatment?: boolean; // New field for rejection status in modal
+  signatureObtained?: boolean; // New field for tracking if signature obtained for rejected treatments
   fvoStatus?: string; // New field for F.VO Status
   voDisplayStatus?: string; // For "Aktiv", "Abgerechnet", "Abgebrochen"
   voCancellationReason?: string; // To store the reason for VO cancellation
   voRawCancellationReason?: string; // To store the raw enum/string value of the reason
   voLogs?: VOLog[]; // New field for VO logs
   treatmentStatus?: string; // Add a separate status field
+  heilmittel: string;  // Kurzzeichen from CSV
+  isBlankoVO: boolean; // Derived from BV=TRUE
+  therapiebericht: "Ja" | "Nein" | "Created"; // New field for therapy report availability
 };
 
 // Type for a treatment history entry
@@ -52,6 +100,22 @@ type TreatmentEntry = {
   notes?: string;
   session?: string;
   order?: number;  // Added order field
+  signatureObtained?: boolean; // New field to track if signature was obtained for rejected treatments
+  heilmittel?: string; // Optional, for Blanko VO treatments
+};
+
+// Type for therapy report form data
+type TherapyReportForm = {
+  therapyType: "Physiotherapie" | "Ergotherapie" | "Logopädie" | "";
+  startDate: Date | null;
+  endDate: Date | null;
+  currentFindings: string;
+  specialFeatures: string;
+  treatmentAccordingToPrescription: boolean;
+  changeTherapyFrequency: boolean;
+  changeIndividualTherapy: boolean;
+  changeGroupTherapy: boolean;
+  continuationOfTherapyRecommended: boolean;
 };
 
 // New type for VO logs
@@ -175,6 +239,149 @@ const ToastNotification = ({ toast, onClose }: {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
         </svg>
       </button>
+    </div>
+  );
+};
+
+// Searchable Dropdown Component for Heilmittel selection
+const SearchableDropdown = ({ 
+  options, 
+  value, 
+  onChange, 
+  placeholder = "Search and select...",
+  hasError = false 
+}: {
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  hasError?: boolean;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filteredOptions, setFilteredOptions] = useState(options);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Filter options based on search term
+  useEffect(() => {
+    const filtered = options.filter(option =>
+      option.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredOptions(filtered);
+  }, [searchTerm, options]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setSearchTerm(''); // Clear search when closing
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setIsOpen(true);
+  };
+
+  const handleOptionSelect = (option: string) => {
+    onChange(option);
+    setIsOpen(false);
+    setSearchTerm(''); // Clear search term after selection
+  };
+
+  const handleClearSelection = () => {
+    onChange('');
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  const handleInputFocus = () => {
+    setIsOpen(true);
+    setSearchTerm(''); // Clear search when opening dropdown
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef} style={{ zIndex: 10000 }}>
+      <div className="relative">
+        <input
+          type="text"
+          className={`w-full px-3 py-2 border rounded-md bg-white ${
+            hasError 
+              ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+          } focus:ring-1 focus:outline-none`}
+          placeholder={!isOpen && value ? "" : placeholder}
+          value={isOpen ? searchTerm : (value || "")}
+          onChange={handleInputChange}
+          onFocus={handleInputFocus}
+          readOnly={!isOpen}
+        />
+        
+        {/* Clear button */}
+        {value && (
+          <button
+            type="button"
+            onClick={handleClearSelection}
+            className="absolute inset-y-0 right-8 flex items-center px-2 text-gray-400 hover:text-gray-600"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+        
+        {/* Dropdown arrow */}
+        <button
+          type="button"
+          onClick={() => {
+            setIsOpen(!isOpen);
+            setSearchTerm('');
+          }}
+          className="absolute inset-y-0 right-0 flex items-center px-2 text-gray-400 hover:text-gray-600"
+        >
+          <svg 
+            className={`w-4 h-4 transition-transform ${isOpen ? 'transform rotate-180' : ''}`} 
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Dropdown list */}
+      {isOpen && (
+        <div className="absolute z-[9999] w-full mt-1 bg-white border border-gray-300 rounded-md shadow-2xl overflow-y-auto" style={{ top: '100%', left: 0, height: '320px', minHeight: '320px', maxHeight: '320px' }}>
+          {filteredOptions.length > 0 ? (
+            <>
+              {filteredOptions.map((option, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => handleOptionSelect(option)}
+                  className={`w-full text-left px-3 py-0.5 text-sm hover:bg-blue-50 focus:bg-blue-50 focus:outline-none ${
+                    value === option ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-900'
+                  }`}
+                >
+                  {option}
+                </button>
+              ))}
+            </>
+          ) : (
+            <div className="px-3 py-2 text-gray-500 text-sm">
+              No options found for "{searchTerm}"
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -478,15 +685,32 @@ const CalendarView = ({
       const treatment = item as Patient & { itemType: 'treatment', displayOrder: number }; // More specific type
       const dateStr = formatDateString(date);
       const historyEntry = treatment.treatmentHistory?.find(entry => entry.date === dateStr);
-      const isRejected = historyEntry?.session === 'Rejected' || historyEntry?.notes?.startsWith("Treatment Rejected:");
+      
+      // Different rejection statuses
+      const isRejectedWithSignature = historyEntry?.session?.startsWith('Rejected-') && 
+                                     historyEntry.session !== 'Rejected-NoCount' && 
+                                     historyEntry.signatureObtained;
+                                     
+      const isRejectedWithoutSignature = historyEntry?.session === 'Rejected-NoCount' || 
+                                        (historyEntry?.session?.startsWith('Rejected-') && !historyEntry.signatureObtained);
+                                        
+      const isRejected = isRejectedWithSignature || isRejectedWithoutSignature;
+      
+      // Format notes for display
+      let displayNotes = historyEntry?.notes || '';
+      if (displayNotes.startsWith("Treatment Rejected:")) {
+        displayNotes = displayNotes.replace("Treatment Rejected:", "").trim();
+      }
       
       return (
         <div 
           key={`treatment-${treatment.id}-${idx}`}
           onClick={() => onEditItem({ type: 'treatment', id: treatment.id, date: dateStr })}
           className={`mb-2 p-2 border rounded-md shadow-sm cursor-pointer ${isBeingDragged ? 'opacity-50' : ''} ${
-            isRejected 
-              ? 'bg-red-100 border-red-300 hover:bg-red-200' 
+            isRejectedWithSignature 
+              ? 'bg-orange-100 border-orange-300 hover:bg-orange-200' 
+              : isRejectedWithoutSignature
+              ? 'bg-red-100 border-red-300 hover:bg-red-200'
               : 'bg-white border-gray-200 hover:bg-gray-50'
           }`}
           draggable
@@ -497,20 +721,45 @@ const CalendarView = ({
         >
           <div className="flex justify-between items-start mb-1">
             <div>
-              <div className={`font-medium text-sm ${isRejected ? 'text-red-700' : ''}`}>{treatment.name}</div>
-              <div className={`text-xs ${isRejected ? 'text-red-600' : 'text-gray-600'}`}>
+              <div className={`font-medium text-sm ${
+                isRejectedWithSignature ? 'text-orange-700' : 
+                isRejectedWithoutSignature ? 'text-red-700' : 
+                ''
+              }`}>{treatment.name}</div>
+              <div className={`text-xs ${
+                isRejectedWithSignature ? 'text-orange-600' : 
+                isRejectedWithoutSignature ? 'text-red-600' : 
+                'text-gray-600'
+              }`}>
                 {treatment.prescription} | {historyEntry?.session || treatment.session}
-                {isRejected && <span className="ml-1 px-1.5 py-0.5 text-xs font-semibold bg-red-200 text-red-800 rounded-full">Rejected</span>}
+                {isRejectedWithSignature && (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs font-semibold bg-orange-200 text-orange-800 rounded-full">
+                    Rejected (✓)
+                  </span>
+                )}
+                {isRejectedWithoutSignature && (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs font-semibold bg-red-200 text-red-800 rounded-full">
+                    Rejected (✗)
+                  </span>
+                )}
               </div>
             </div>
-            <div className={`text-xs px-1.5 py-0.5 rounded-full ${isRejected ? 'bg-red-200 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
+            <div className={`text-xs px-1.5 py-0.5 rounded-full ${
+              isRejectedWithSignature ? 'bg-orange-200 text-orange-800' : 
+              isRejectedWithoutSignature ? 'bg-red-200 text-red-800' : 
+              'bg-blue-100 text-blue-800'
+            }`}>
               #{historyEntry?.order || treatment.order || 0}
             </div>
           </div>
           
           {historyEntry?.notes && (
-            <div className={`text-xs truncate ${isRejected ? 'text-red-500' : 'text-gray-500'}`}>
-              {isRejected ? historyEntry.notes.replace("Treatment Rejected: ", "") : historyEntry.notes} 
+            <div className={`text-xs truncate ${
+              isRejectedWithSignature ? 'text-orange-500' : 
+              isRejectedWithoutSignature ? 'text-red-500' : 
+              'text-gray-500'
+            }`}>
+              {displayNotes}
             </div>
           )}
         </div>
@@ -646,6 +895,30 @@ export default function TreatmentDocumentationV2Wireframe() {
   const [patientForLogs, setPatientForLogs] = useState<Patient | null>(null);
   const [nextLogId, setNextLogId] = useState(1); // New state for generating log IDs
   
+  // State for therapy report modal
+  const [isTherapyReportModalOpen, setIsTherapyReportModalOpen] = useState(false);
+  const [therapyReportPatient, setTherapyReportPatient] = useState<Patient | null>(null);
+  const [therapyReportForm, setTherapyReportForm] = useState<TherapyReportForm>({
+    therapyType: "",
+    startDate: null,
+    endDate: null,
+    currentFindings: "",
+    specialFeatures: "",
+    treatmentAccordingToPrescription: true,
+    changeTherapyFrequency: false,
+    changeIndividualTherapy: false,
+    changeGroupTherapy: false,
+    continuationOfTherapyRecommended: true
+  });
+  
+  // State for therapy report form calendar controls
+  const [startDateCalendarOpen, setStartDateCalendarOpen] = useState(false);
+  const [endDateCalendarOpen, setEndDateCalendarOpen] = useState(false);
+  const [startDateCalendarMonth, setStartDateCalendarMonth] = useState(new Date().getMonth());
+  const [startDateCalendarYear, setStartDateCalendarYear] = useState(new Date().getFullYear());
+  const [endDateCalendarMonth, setEndDateCalendarMonth] = useState(new Date().getMonth());
+  const [endDateCalendarYear, setEndDateCalendarYear] = useState(new Date().getFullYear());
+  
   // State for toast notifications
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [nextToastId, setNextToastId] = useState(1);
@@ -662,25 +935,81 @@ export default function TreatmentDocumentationV2Wireframe() {
   const [draggedPatientId, setDraggedPatientId] = useState<number | null>(null);
   const [activityDropdownOpen, setActivityDropdownOpen] = useState(false); // State for activity dropdown
   
-  // State for "Keine Folge-VO bestellen" modal
-  const [isKeineFolgeVoModalOpen, setIsKeineFolgeVoModalOpen] = useState(false);
-  const [selectedPatientForFolgeVo, setSelectedPatientForFolgeVo] = useState<Patient | null>(null);
-  const [keineFolgeVoReason, setKeineFolgeVoReason] = useState(''); // New state variable for reason
-  
-  // State for "Abbrechen VO" modal
-  const [isAbbrechenVoModalOpen, setIsAbbrechenVoModalOpen] = useState(false);
-  const [selectedPatientForAbbrechenVo, setSelectedPatientForAbbrechenVo] = useState<Patient | null>(null);
-  const [abbrechenReason, setAbbrechenReason] = useState('');
-  const [customAbbrechenReason, setCustomAbbrechenReason] = useState('');
-  const [willOrderNewVO, setWillOrderNewVO] = useState<'Yes' | 'No'>('No'); // New state for tracking if a new VO will be ordered
-  
-  // State for "Transfer Patient" modal
-  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
-  const [selectedPatientForTransfer, setSelectedPatientForTransfer] = useState<Patient | null>(null);
-  const [selectedTherapist, setSelectedTherapist] = useState<string>('');
+  // Removed modal states for simplified prototype
   
   // State for selected patient IDs for batch actions
   const [selectedPatientIds, setSelectedPatientIds] = useState<number[]>([]);
+  
+  // State for Heilmittel selection and validation in treatment modal
+  const [selectedHeilmittel, setSelectedHeilmittel] = useState<{[patientId: number]: string}>({});
+  const [heilmittelErrors, setHeilmittelErrors] = useState<{[patientId: number]: boolean}>({});
+  
+  // State for duration selection for Blanko VO patients (in minutes)
+  const [selectedDuration, setSelectedDuration] = useState<{[patientId: number]: number}>({});
+  const [durationErrors, setDurationErrors] = useState<{[patientId: number]: boolean}>({});
+  
+  // Function to update Heilmittel selection for a patient
+  const updatePatientHeilmittel = (patientId: number, heilmittel: string) => {
+    setSelectedHeilmittel(prev => ({
+      ...prev,
+      [patientId]: heilmittel
+    }));
+    
+    // Clear error when selection is made
+    if (heilmittel) {
+      setHeilmittelErrors(prev => ({
+        ...prev,
+        [patientId]: false
+      }));
+    }
+  };
+  
+  // Function to update duration selection for a patient
+  const updatePatientDuration = (patientId: number, duration: number) => {
+    setSelectedDuration(prev => ({
+      ...prev,
+      [patientId]: duration
+    }));
+    
+    // Clear error when selection is made
+    if (duration) {
+      setDurationErrors(prev => ({
+        ...prev,
+        [patientId]: false
+      }));
+    }
+  };
+  
+  // Duration options in 15-minute intervals up to 180 minutes
+  const durationOptions = [15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180];
+  
+  // Function to validate required Heilmittel and Duration for Blanko VO patients
+  const validateHeilmittelSelection = (patients: Patient[]): boolean => {
+    const heilmittelErrors: {[patientId: number]: boolean} = {};
+    const durationErrors: {[patientId: number]: boolean} = {};
+    let hasErrors = false;
+    
+    patients.forEach(patient => {
+      if (patient.isBlankoVO) {
+        const hasHeilmittelSelection = selectedHeilmittel[patient.id] && selectedHeilmittel[patient.id].trim() !== '';
+        const hasDurationSelection = selectedDuration[patient.id] && selectedDuration[patient.id] > 0;
+        
+        if (!hasHeilmittelSelection) {
+          heilmittelErrors[patient.id] = true;
+          hasErrors = true;
+        }
+        
+        if (!hasDurationSelection) {
+          durationErrors[patient.id] = true;
+          hasErrors = true;
+        }
+      }
+    });
+    
+    setHeilmittelErrors(heilmittelErrors);
+    setDurationErrors(durationErrors);
+    return !hasErrors;
+  };
   
   // Function to add a toast notification
   const addToast = (message: string, type: 'success' | 'error' | 'info' = 'success', duration = 5000) => {
@@ -760,6 +1089,11 @@ export default function TreatmentDocumentationV2Wireframe() {
     const randomIndex = Math.floor(Math.random() * additionalNotes.length);
     return additionalNotes[randomIndex];
   };
+
+  // Function to get random therapiebericht value (60% "Ja", 40% "Nein")
+  const getRandomTherapiebericht = (): "Ja" | "Nein" => {
+    return Math.random() < 0.6 ? "Ja" : "Nein";
+  };
   
   // State for selected patients
   const [patients, setPatients] = useState<Patient[]>([
@@ -774,59 +1108,13 @@ export default function TreatmentDocumentationV2Wireframe() {
       status: 'Active',
       doctor: 'Dr. Wilson',
       selected: false,
-      totalTreatments: 12,
-      completedTreatments: 8,
-      treated: true,
-      treatmentHistory: [
-        {
-          date: '25.02.2025', // Tuesday - Last week of Feb
-          notes: 'Initial assessment and range of motion exercises.',
-          session: '1/12',
-          order: 1
-        },
-        {
-          date: '28.02.2025', // Friday - Last week of Feb
-          notes: 'Continued with ROM exercises, added light resistance.',
-          session: '2/12',
-          order: 2
-        },
-        {
-          date: '04.03.2025', // Tuesday - 1st week of March
-          notes: 'Progressed to moderate resistance exercises.',
-          session: '3/12',
-          order: 1
-        },
-        {
-          date: '07.03.2025', // Friday - 1st week of March
-          notes: 'Added functional movement patterns.',
-          session: '4/12',
-          order: 2
-        },
-        {
-          date: '11.03.2025', // Tuesday - 2nd week of March
-          notes: 'Increased resistance, patient tolerating well.',
-          session: '5/12',
-          order: 1
-        },
-        {
-          date: '14.03.2025', // Friday - 2nd week of March
-          notes: 'Focus on gait training and balance exercises.',
-          session: '6/12',
-          order: 3
-        },
-        {
-          date: '18.03.2025', // Tuesday - 3rd week of March
-          notes: 'Continued progress with strength training.',
-          session: '7/12',
-          order: 2
-        },
-        {
-          date: '21.03.2025', // Friday - 3rd week of March
-          notes: 'Added proprioceptive exercises.',
-          session: '8/12',
-          order: 1
-        }
-      ]
+      totalTreatments: 0, // Blanko VO patient - totalTreatments = 0
+      completedTreatments: 0, // Current treatments completed
+      treated: false,
+      heilmittel: 'MFB-H-BV', // Blanko VO Heilmittel (ERGO)
+      isBlankoVO: true, // Blanko VO patient
+      treatmentHistory: [],
+      therapiebericht: "Ja" // Therapy report available
     },
     {
       id: 2,
@@ -839,47 +1127,13 @@ export default function TreatmentDocumentationV2Wireframe() {
       status: 'Active',
       doctor: 'Dr. Miller',
       selected: false,
-      totalTreatments: 10,
-      completedTreatments: 6,
-      treated: true,
-      treatmentHistory: [
-        {
-          date: '24.02.2025', // Monday - Last week of Feb
-          notes: 'Initial evaluation of cervical spine mobility.',
-          session: '1/10',
-          order: 1
-        },
-        {
-          date: '27.02.2025', // Thursday - Last week of Feb
-          notes: 'Gentle manual therapy for cervical spine.',
-          session: '2/10',
-          order: 3
-        },
-        {
-          date: '03.03.2025', // Monday - 1st week of March
-          notes: 'Progressed to active ROM exercises.',
-          session: '3/10',
-          order: 2
-        },
-        {
-          date: '06.03.2025', // Thursday - 1st week of March
-          notes: 'Added isometric neck strengthening.',
-          session: '4/10',
-          order: 1
-        },
-        {
-          date: '10.03.2025', // Monday - 2nd week of March
-          notes: 'Continued with manual therapy and exercises.',
-          session: '5/10',
-          order: 3
-        },
-        {
-          date: '13.03.2025', // Thursday - 2nd week of March
-          notes: 'Focus on posture education and ergonomics.',
-          session: '6/10',
-          order: 2
-        }
-      ]
+      totalTreatments: 0, // Blanko VO patient - totalTreatments = 0
+      completedTreatments: 0, // Current treatments completed
+      treated: false,
+      heilmittel: 'NOB-H-BV', // Blanko VO Heilmittel (ERGO)
+      isBlankoVO: true, // Blanko VO patient
+      treatmentHistory: [],
+      therapiebericht: "Nein" // Therapy report not available
     },
     {
       id: 3,
@@ -892,71 +1146,13 @@ export default function TreatmentDocumentationV2Wireframe() {
       status: 'Active',
       doctor: 'Dr. Brown',
       selected: false,
-      totalTreatments: 18,
-      completedTreatments: 10,
-      treated: true,
-      treatmentHistory: [
-        {
-          date: '22.02.2025', // Saturday - Before Last week of Feb
-          notes: 'Initial evaluation post-surgery.',
-          session: '1/18',
-          order: 1
-        },
-        {
-          date: '24.02.2025', // Monday - Last week of Feb
-          notes: 'Wound check and gentle movements.',
-          session: '2/18',
-          order: 2
-        },
-        {
-          date: '26.02.2025', // Wednesday - Last week of Feb
-          notes: 'Post-surgery assessment and light mobility work.',
-          session: '3/18',
-          order: 2
-        },
-        {
-          date: '01.03.2025', // Saturday - Last week of Feb/1st week March
-          notes: 'Gentle ROM exercises, wound healing progressing well.',
-          session: '4/18',
-          order: 1
-        },
-        {
-          date: '05.03.2025', // Wednesday - 1st week of March
-          notes: 'Progressed to weight-bearing exercises as tolerated.',
-          session: '5/18',
-          order: 2
-        },
-        {
-          date: '08.03.2025', // Saturday - 1st week of March
-          notes: 'Increased mobility work, started light resistance.',
-          session: '6/18',
-          order: 3
-        },
-        {
-          date: '12.03.2025', // Wednesday - 2nd week of March
-          notes: 'Functional movement patterns introduced.',
-          session: '7/18',
-          order: 1
-        },
-        {
-          date: '15.03.2025', // Saturday - 2nd week of March
-          notes: 'Progressed resistance training, good tolerance.',
-          session: '8/18',
-          order: 2
-        },
-        {
-          date: '19.03.2025', // Wednesday - 3rd week of March
-          notes: 'Sport-specific movement patterns introduced.',
-          session: '9/18',
-          order: 3
-        },
-        {
-          date: '22.03.2025', // Saturday - 3rd week of March
-          notes: 'Added plyometric training components.',
-          session: '10/18',
-          order: 1
-        }
-      ]
+      totalTreatments: 0, // Blanko VO patient - totalTreatments = 0
+      completedTreatments: 0, // Current treatments completed
+      treated: false,
+      heilmittel: 'PFB-H-BV', // Blanko VO Heilmittel
+      isBlankoVO: true, // Blanko VO patient
+      treatmentHistory: [],
+      therapiebericht: "Ja" // Therapy report available
     },
     {
       id: 4,
@@ -972,6 +1168,8 @@ export default function TreatmentDocumentationV2Wireframe() {
       totalTreatments: 20,
       completedTreatments: 14,
       treated: true,
+      heilmittel: 'BGM', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
       treatmentHistory: [
         {
           date: '11.02.2025', // Tuesday - mid Feb
@@ -1057,7 +1255,8 @@ export default function TreatmentDocumentationV2Wireframe() {
           session: '14/20',
           order: 1
         }
-      ]
+      ],
+      therapiebericht: "Ja" // Therapy report available
     },
     {
       id: 5,
@@ -1073,6 +1272,8 @@ export default function TreatmentDocumentationV2Wireframe() {
       totalTreatments: 15,
       completedTreatments: 10,
       treated: true,
+      heilmittel: 'KMT-H', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
       treatmentHistory: [
         {
           date: '04.02.2025', // Tuesday - early Feb
@@ -1134,7 +1335,324 @@ export default function TreatmentDocumentationV2Wireframe() {
           session: '10/15',
           order: 1
         }
-      ]
+      ],
+      therapiebericht: "Nein" // Therapy report not available
+    },
+    {
+      id: 9,
+      name: 'Sarah Davis',
+      facility: 'Pain Management Center',
+      lastTreatment: '22.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist B',
+      prescription: '7788-6',
+      status: 'Active',
+      doctor: 'Dr. Anderson',
+      selected: false,
+      totalTreatments: 16,
+      completedTreatments: 5,
+      treated: true,
+      heilmittel: 'MLD30H', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
+      treatmentHistory: [
+        {
+          date: '08.03.2025',
+          notes: 'Initial chronic pain assessment.',
+          session: '1/16',
+          order: 1
+        },
+        {
+          date: '12.03.2025',
+          notes: 'Manual therapy for lower back pain.',
+          session: '2/16',
+          order: 2
+        },
+        {
+          date: '15.03.2025',
+          notes: 'Core strengthening exercises introduced.',
+          session: '3/16',
+          order: 1
+        },
+        {
+          date: '19.03.2025',
+          notes: 'Pain management education and exercises.',
+          session: '4/16',
+          order: 3
+        },
+        {
+          date: '22.03.2025',
+          notes: 'Progressed to functional movement training.',
+          session: '5/16',
+          order: 2
+        }
+      ],
+      therapiebericht: "Ja" // Therapy report available
+    },
+    {
+      id: 10,
+      name: 'David Wilson',
+      facility: 'Cardiac Rehab',
+      lastTreatment: '21.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist A',
+      prescription: '4455-7',
+      status: 'Active',
+      doctor: 'Dr. Thompson',
+      selected: false,
+      totalTreatments: 24,
+      completedTreatments: 8,
+      treated: true,
+      heilmittel: 'PNF', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
+      treatmentHistory: [
+        {
+          date: '01.03.2025',
+          notes: 'Post-cardiac event evaluation.',
+          session: '1/24',
+          order: 1
+        },
+        {
+          date: '05.03.2025',
+          notes: 'Low-intensity cardiovascular training.',
+          session: '2/24',
+          order: 2
+        },
+        {
+          date: '08.03.2025',
+          notes: 'Breathing exercises and light activity.',
+          session: '3/24',
+          order: 1
+        },
+        {
+          date: '12.03.2025',
+          notes: 'Progressed exercise intensity gradually.',
+          session: '4/24',
+          order: 3
+        },
+        {
+          date: '15.03.2025',
+          notes: 'Education on heart-healthy lifestyle.',
+          session: '5/24',
+          order: 2
+        },
+        {
+          date: '19.03.2025',
+          notes: 'Resistance training with monitoring.',
+          session: '6/24',
+          order: 1
+        },
+        {
+          date: '21.03.2025',
+          notes: 'Continued cardiovascular conditioning.',
+          session: '7/24',
+          order: 3
+        },
+        {
+          date: '21.03.2025',
+          notes: 'Patient education on home exercise program.',
+          session: '8/24',
+          order: 1
+        }
+      ],
+      therapiebericht: "Nein" // Therapy report not available
+    },
+    {
+      id: 11,
+      name: 'Lisa Martinez',
+      facility: 'Neurological Center',
+      lastTreatment: '20.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist B',
+      prescription: '6677-8',
+      status: 'Active',
+      doctor: 'Dr. Garcia',
+      selected: false,
+      totalTreatments: 30,
+      completedTreatments: 12,
+      treated: true,
+      heilmittel: 'BO-E-H', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
+      treatmentHistory: [
+        {
+          date: '18.02.2025',
+          notes: 'Post-stroke evaluation and assessment.',
+          session: '1/30',
+          order: 1
+        },
+        {
+          date: '22.02.2025',
+          notes: 'Passive range of motion exercises.',
+          session: '2/30',
+          order: 2
+        },
+        {
+          date: '26.02.2025',
+          notes: 'Balance training and gait work.',
+          session: '3/30',
+          order: 1
+        },
+        {
+          date: '01.03.2025',
+          notes: 'Progressed to active assisted exercises.',
+          session: '4/30',
+          order: 3
+        },
+        {
+          date: '05.03.2025',
+          notes: 'Functional mobility training.',
+          session: '5/30',
+          order: 2
+        },
+        {
+          date: '08.03.2025',
+          notes: 'Speech therapy coordination.',
+          session: '6/30',
+          order: 1
+        },
+        {
+          date: '12.03.2025',
+          notes: 'Activities of daily living practice.',
+          session: '7/30',
+          order: 3
+        },
+        {
+          date: '15.03.2025',
+          notes: 'Cognitive-motor task training.',
+          session: '8/30',
+          order: 2
+        },
+        {
+          date: '19.03.2025',
+          notes: 'Advanced balance and coordination.',
+          session: '9/30',
+          order: 1
+        },
+        {
+          date: '20.03.2025',
+          notes: 'Family education on home exercises.',
+          session: '10/30',
+          order: 3
+        },
+        {
+          date: '20.03.2025',
+          notes: 'Adaptive equipment evaluation.',
+          session: '11/30',
+          order: 2
+        },
+        {
+          date: '20.03.2025',
+          notes: 'Community reintegration planning.',
+          session: '12/30',
+          order: 1
+        }
+      ],
+      therapiebericht: "Ja" // Therapy report available
+    },
+    {
+      id: 12,
+      name: 'Kevin Lee',
+      facility: 'Industrial Rehab',
+      lastTreatment: '19.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist A',
+      prescription: '9988-9',
+      status: 'Active',
+      doctor: 'Dr. Johnson',
+      selected: false,
+      totalTreatments: 14,
+      completedTreatments: 7,
+      treated: true,
+      heilmittel: 'KOMP', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
+      treatmentHistory: [
+        {
+          date: '26.02.2025',
+          notes: 'Work-related injury assessment.',
+          session: '1/14',
+          order: 1
+        },
+        {
+          date: '01.03.2025',
+          notes: 'Ergonomic evaluation and education.',
+          session: '2/14',
+          order: 2
+        },
+        {
+          date: '05.03.2025',
+          notes: 'Job-specific movement training.',
+          session: '3/14',
+          order: 1
+        },
+        {
+          date: '08.03.2025',
+          notes: 'Lifting mechanics and body mechanics.',
+          session: '4/14',
+          order: 3
+        },
+        {
+          date: '12.03.2025',
+          notes: 'Functional capacity evaluation.',
+          session: '5/14',
+          order: 2
+        },
+        {
+          date: '15.03.2025',
+          notes: 'Work hardening program initiation.',
+          session: '6/14',
+          order: 1
+        },
+        {
+          date: '19.03.2025',
+          notes: 'Return-to-work conditioning.',
+          session: '7/14',
+          order: 3
+        }
+      ],
+      therapiebericht: "Nein" // Therapy report not available
+    },
+    {
+      id: 13,
+      name: 'Maria Rodriguez',
+      facility: 'Women\'s Health Clinic',
+      lastTreatment: '22.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist B',
+      prescription: '1357-0',
+      status: 'Active',
+      doctor: 'Dr. Williams',
+      selected: false,
+      totalTreatments: 8,
+      completedTreatments: 4,
+      treated: true,
+      heilmittel: 'HR', // Regular Heilmittel  
+      isBlankoVO: false, // Regular patient
+      treatmentHistory: [
+        {
+          date: '08.03.2025',
+          notes: 'Postpartum pelvic floor evaluation.',
+          session: '1/8',
+          order: 1
+        },
+        {
+          date: '12.03.2025',
+          notes: 'Pelvic floor strengthening exercises.',
+          session: '2/8',
+          order: 2
+        },
+        {
+          date: '15.03.2025',
+          notes: 'Core rehabilitation and diastasis recti.',
+          session: '3/8',
+          order: 1
+        },
+        {
+          date: '22.03.2025',
+          notes: 'Functional movement and posture correction.',
+          session: '4/8',
+          order: 3
+        }
+      ],
+      therapiebericht: "Ja" // Therapy report available
     }
   ]);
 
@@ -1142,57 +1660,108 @@ export default function TreatmentDocumentationV2Wireframe() {
   const [inactivePatients, setInactivePatients] = useState<Patient[]>([
     {
       id: 6, // Ensure unique IDs
-      name: 'Alice Brown',
-      facility: 'Community Clinic',
-      lastTreatment: '10.01.2025',
-      frequencyWTD: '0',
-      therapeut: 'Therapist B',
-      prescription: '9876-6',
-      status: 'Inactive',
-      doctor: 'Dr. Davis',
+      name: 'Sarah Davis',
+      facility: 'Pain Management',
+      lastTreatment: '19.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist C',
+      prescription: '5566-6',
+      status: 'Active',
+      doctor: 'Dr. Anderson',
       selected: false,
-      totalTreatments: 10,
-      completedTreatments: 10,
-      treated: true, // or false if never treated
+      totalTreatments: 12,
+      completedTreatments: 7,
+      treated: true,
+      heilmittel: 'MLD30H', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
       treatmentHistory: [
         { date: '10.01.2025', notes: 'Completed all sessions.', session: '10/10', order: 1 }
-      ]
+      ],
+      therapiebericht: getRandomTherapiebericht()
     },
     {
       id: 7,
-      name: 'Robert Green',
-      facility: 'Wellness Center',
-      lastTreatment: '05.12.2024',
-      frequencyWTD: '0',
-      therapeut: 'Therapist A',
-      prescription: '5432-7',
-      status: 'Inactive',
-      doctor: 'Dr. Evans',
+      name: 'David Wilson',
+      facility: 'Cardiac Rehab',
+      lastTreatment: '22.03.2025',
+      frequencyWTD: '3',
+      therapeut: 'Therapist D',
+      prescription: '7788-7',
+      status: 'Active',
+      doctor: 'Dr. Thompson',
       selected: false,
-      totalTreatments: 12,
-      completedTreatments: 5, // Terminated early
+      totalTreatments: 24,
+      completedTreatments: 18,
       treated: true,
+      heilmittel: 'PNF', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
       treatmentHistory: [
         { date: '05.12.2024', notes: 'Treatment terminated by therapist.', session: '5/12', order: 1 }
-      ]
+      ],
+      therapiebericht: getRandomTherapiebericht()
     },
     {
       id: 8,
-      name: 'Julia White',
-      facility: 'Home Care',
-      lastTreatment: '15.11.2024',
-      frequencyWTD: '0',
-      therapeut: 'Therapist B',
-      prescription: 'H1209',
-      status: 'Inactive',
-      doctor: 'Dr. King',
+      name: 'Lisa Martinez',
+      facility: 'Neurological Center',
+      lastTreatment: '17.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist E',
+      prescription: '9900-8',
+      status: 'Active',
+      doctor: 'Dr. Davis',
       selected: false,
-      totalTreatments: 8,
-      completedTreatments: 3,
+      totalTreatments: 16,
+      completedTreatments: 9,
       treated: true,
+      heilmittel: 'BO-E-H', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
       treatmentHistory: [
         { date: '15.11.2024', notes: 'Patient self-discharged.', session: '3/8', order: 1 }
-      ]
+      ],
+      therapiebericht: getRandomTherapiebericht()
+    },
+    {
+      id: 9,
+      name: 'Kevin Lee',
+      facility: 'Industrial Rehab',
+      lastTreatment: '18.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist F',
+      prescription: '1133-9',
+      status: 'Active',
+      doctor: 'Dr. Garcia',
+      selected: false,
+      totalTreatments: 14,
+      completedTreatments: 11,
+      treated: true,
+      heilmittel: 'KOMP', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
+      treatmentHistory: [
+        { date: '18.03.2025', notes: 'Industrial rehab exercises.', session: '11/14', order: 1 }
+      ],
+      therapiebericht: getRandomTherapiebericht()
+    },
+    {
+      id: 10,
+      name: 'Maria Rodriguez',
+      facility: 'Women\'s Health Clinic',
+      lastTreatment: '20.03.2025',
+      frequencyWTD: '2',
+      therapeut: 'Therapist G',
+      prescription: '2244-10',
+      status: 'Active',
+      doctor: 'Dr. Kim',
+      selected: false,
+      totalTreatments: 10,
+      completedTreatments: 6,
+      treated: true,
+      heilmittel: 'HR', // Regular Heilmittel
+      isBlankoVO: false, // Regular patient
+      treatmentHistory: [
+        { date: '20.03.2025', notes: 'Women\'s health therapy session.', session: '6/10', order: 1 }
+      ],
+      therapiebericht: getRandomTherapiebericht()
     }
   ]);
 
@@ -1347,6 +1916,61 @@ export default function TreatmentDocumentationV2Wireframe() {
     setIsLogsModalOpen(!isLogsModalOpen);
   };
 
+  // Function to open therapy report modal
+  const openTherapyReportModal = (patient: Patient) => {
+    setTherapyReportPatient(patient);
+    setIsTherapyReportModalOpen(true);
+    // Reset form to defaults
+    setTherapyReportForm({
+      therapyType: "",
+      startDate: null,
+      endDate: null,
+      currentFindings: "",
+      specialFeatures: "",
+      treatmentAccordingToPrescription: true,
+      changeTherapyFrequency: false,
+      changeIndividualTherapy: false,
+      changeGroupTherapy: false,
+      continuationOfTherapyRecommended: true
+    });
+    setTherapyReportErrors({});
+    setTherapyReportModalError("");
+  };
+
+  // Function to close therapy report modal
+  const closeTherapyReportModal = () => {
+    setIsTherapyReportModalOpen(false);
+    setTherapyReportPatient(null);
+    setTherapyReportErrors({});
+    setTherapyReportModalError("");
+    // Form state will be reset when modal opens again
+  };
+
+  // Function to update therapy report form fields
+  const updateTherapyReportForm = (field: keyof TherapyReportForm, value: any) => {
+    setTherapyReportForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Function to validate therapy report form
+  const validateTherapyReportForm = (): boolean => {
+    const { therapyType, startDate, endDate, currentFindings, specialFeatures } = therapyReportForm;
+    
+    // Check required fields
+    if (!therapyType || !startDate || !endDate || !currentFindings.trim() || !specialFeatures.trim()) {
+      return false;
+    }
+    
+    // Check date range (end date should be after start date)
+    if (endDate <= startDate) {
+      return false;
+    }
+    
+    return true;
+  };
+
   // Function to toggle card collapse
   const toggleCardCollapse = (itemId: number) => {
     setCollapsedCards(prev => 
@@ -1391,7 +2015,19 @@ export default function TreatmentDocumentationV2Wireframe() {
   // Function to update patient rejection status
   const updatePatientRejection = (id: number, rejected: boolean) => {
     setModalPatients(modalPatients.map(patient =>
-      patient.id === id && !('isBreak' in patient) ? { ...patient, rejectedTreatment: rejected } : patient
+      patient.id === id && !('isBreak' in patient) ? { 
+        ...patient, 
+        rejectedTreatment: rejected,
+        // If rejection is being turned off, also turn off signature obtained
+        ...(rejected === false ? { signatureObtained: false } : {})
+      } : patient
+    ) as ModalItem[]);
+  };
+
+  // Function to update signature obtained status
+  const updateSignatureObtained = (id: number, signatureObtained: boolean) => {
+    setModalPatients(modalPatients.map(patient =>
+      patient.id === id && !('isBreak' in patient) ? { ...patient, signatureObtained } : patient
     ) as ModalItem[]);
   };
 
@@ -1517,6 +2153,24 @@ export default function TreatmentDocumentationV2Wireframe() {
 
   // Function to handle saving the form
   const handleSave = () => {
+    // Validate Heilmittel selection for Blanko VO patients FIRST
+    const modalPatientList = modalPatients.filter((item): item is Patient => !('isBreak' in item));
+    const heilmittelValidation = validateHeilmittelSelection(modalPatientList);
+    
+    if (!heilmittelValidation) {
+      // Focus on the first patient with an error (optional UX enhancement)
+      const firstErrorPatient = modalPatientList.find(patient => 
+        patient.isBlankoVO && heilmittelErrors[patient.id]
+      );
+      
+      addToast(
+        `Heilmittel selection required for ${firstErrorPatient?.name || 'Blanko VO patients'}. Please select a Heilmittel before saving.`,
+        'error',
+        7000
+      );
+      return; // Prevent saving
+    }
+    
     // Process break activities
     const breakActivities = modalPatients
       .filter((item): item is BreakActivity => 'isBreak' in item)
@@ -1544,20 +2198,77 @@ export default function TreatmentDocumentationV2Wireframe() {
               const entryIndex = treatmentHistory.findIndex(entry => entry.date === editingItem.date);
               
               if (entryIndex !== -1) {
+                // Get the previous entry
+                const previousEntry = treatmentHistory[entryIndex];
+                
+                // Determine if rejection or signature status has changed
+                const wasRejected = previousEntry.session === 'Rejected' || 
+                  previousEntry.session === 'Rejected-NoCount' || 
+                  previousEntry.session?.startsWith('Rejected-');
+                const wasSignatureObtained = previousEntry.signatureObtained;
+                
+                // Determine if treatment count should change
+                const previouslyCounted = !wasRejected || (wasRejected && wasSignatureObtained);
+                const shouldCountNow = !modalPatient.rejectedTreatment || 
+                  (modalPatient.rejectedTreatment && modalPatient.signatureObtained);
+                
+                // Determine session display based on current state
+                let sessionDisplay;
+                if (!modalPatient.rejectedTreatment) {
+                  // Regular treatment, use existing session or create new one
+                  sessionDisplay = previousEntry.session?.includes('/') 
+                    ? previousEntry.session 
+                    : `${patient.completedTreatments}/${patient.totalTreatments}`;
+                } else if (modalPatient.rejectedTreatment && modalPatient.signatureObtained) {
+                  // Rejected with signature, keep count
+                  sessionDisplay = previousEntry.session?.includes('/') 
+                    ? `Rejected-${previousEntry.session?.split('/')[0]}/${patient.totalTreatments}`
+                    : `Rejected-${patient.completedTreatments}/${patient.totalTreatments}`;
+                } else {
+                  // Rejected without signature, no count
+                  sessionDisplay = 'Rejected-NoCount';
+                }
+                
+                // Format notes for Blanko VO patients: "Heilmittel (Duration): Notes"
+                let formattedNotes = modalPatient.notes;
+                if (modalPatient.isBlankoVO) {
+                  const duration = selectedDuration[modalPatient.id] || '';
+                  if (duration) {
+                    formattedNotes = `(${duration} min): ${modalPatient.notes}`;
+                  }
+                }
+                
                 // Update existing entry
                 treatmentHistory[entryIndex] = {
                   ...treatmentHistory[entryIndex],
+                  notes: formattedNotes,
+                  order: modalPatient.order,
+                  session: sessionDisplay,
+                  signatureObtained: modalPatient.rejectedTreatment ? modalPatient.signatureObtained : undefined,
+                  heilmittel: modalPatient.isBlankoVO ? selectedHeilmittel[modalPatient.id] : undefined, // Include Heilmittel for Blanko VO patients
+                };
+                
+                // Update completedTreatments count if needed
+                let newCompletedTreatments = patient.completedTreatments;
+                
+                if (previouslyCounted && !shouldCountNow) {
+                  // If it was previously counted but shouldn't be now, decrement
+                  newCompletedTreatments = Math.max(0, newCompletedTreatments - 1);
+                } else if (!previouslyCounted && shouldCountNow) {
+                  // If it wasn't previously counted but should be now, increment
+                  newCompletedTreatments = patient.isBlankoVO 
+                    ? newCompletedTreatments + 1  // For Blanko VOs, just increment
+                    : Math.min(patient.totalTreatments, newCompletedTreatments + 1);  // For regular VOs, respect limit
+                }
+                
+                return {
+                  ...patient,
                   notes: modalPatient.notes,
-                  order: modalPatient.order
+                  order: modalPatient.order,
+                  completedTreatments: newCompletedTreatments,
+                  treatmentHistory
                 };
               }
-              
-              return {
-                ...patient,
-                notes: modalPatient.notes,
-                order: modalPatient.order,
-                treatmentHistory
-              };
             }
           }
           return patient;
@@ -1608,27 +2319,65 @@ export default function TreatmentDocumentationV2Wireframe() {
         // Find the matching patient in modalPatients (excluding break items)
         const modalPatient = modalPatients.find(mp => !('isBreak' in mp) && mp.id === patient.id) as Patient | undefined;
         if (modalPatient) {
-          // Always increment completedTreatments if a session is documented, up to totalTreatments
-          const newCompletedTreatments = Math.min(patient.completedTreatments + 1, patient.totalTreatments);
+          // Determine if we should increment the count
+          // Increment IF treatment was NOT rejected OR (it was rejected AND signature was obtained)
+          const shouldIncrementCount = !modalPatient.rejectedTreatment || (modalPatient.rejectedTreatment && modalPatient.signatureObtained);
+          
+          // Only increment completedTreatments if we should count this treatment
+          const newCompletedTreatments = shouldIncrementCount 
+            ? (patient.isBlankoVO 
+                ? patient.completedTreatments + 1  // For Blanko VOs, just increment (no max limit)
+                : Math.min(patient.completedTreatments + 1, patient.totalTreatments))  // For regular VOs, respect the limit
+            : patient.completedTreatments;
+          
+          // Create session display string based on whether treatment counts
+          let sessionDisplay;
+          const denominator = patient.isBlankoVO ? '0' : patient.totalTreatments.toString();
+          
+          if (!modalPatient.rejectedTreatment) {
+            // Regular treatment
+            sessionDisplay = `${newCompletedTreatments}/${denominator}`;
+          } else if (modalPatient.rejectedTreatment && modalPatient.signatureObtained) {
+            // Rejected but signature obtained (counts toward total)
+            sessionDisplay = `Rejected-${newCompletedTreatments}/${denominator}`;
+          } else {
+            // Rejected without signature (doesn't count)
+            sessionDisplay = 'Rejected-NoCount';
+          }
+          
           return {
             ...patient,
-            treated: !modalPatient.rejectedTreatment, // Mark as not treated if successfully completed
+            treated: !modalPatient.rejectedTreatment, // Mark as not treated if rejected
             treatmentStatus: modalPatient.rejectedTreatment ? "Rejected" : "Treated", // Add a separate status field
             therapeut: patient.therapeut, // Maintain original therapist
             lastTreatment: treatmentDate,
             notes: modalPatient.notes, // Store original notes here
             order: modalPatient.order, // Keep order if it exists from modal
             selected: false,
-            completedTreatments: newCompletedTreatments, // Numerator always increments
+            completedTreatments: newCompletedTreatments, // Conditionally increment based on rejection/signature
             treatmentHistory: [
               ...(patient.treatmentHistory || []),
-              {
-                date: treatmentDate,
-                notes: modalPatient.rejectedTreatment ? `Treatment Rejected: ${modalPatient.notes}` : modalPatient.notes, // Add prefix for logs if rejected
-                session: modalPatient.rejectedTreatment ? 'Rejected' : `${newCompletedTreatments}/${patient.totalTreatments}`,
-                order: modalPatient.order,
-                // We can add a specific flag here too if needed, e.g., wasRejected: modalPatient.rejectedTreatment
-              }
+              (() => {
+                // Format notes for Blanko VO patients: "Heilmittel (Duration): Notes"
+                let formattedNotes = modalPatient.notes;
+                if (modalPatient.isBlankoVO) {
+                  const duration = selectedDuration[modalPatient.id] || '';
+                  if (duration) {
+                    formattedNotes = `(${duration} min): ${modalPatient.notes}`;
+                  }
+                }
+                
+                const finalNotes = modalPatient.rejectedTreatment ? `Treatment Rejected: ${formattedNotes}` : formattedNotes;
+                
+                return {
+                  date: treatmentDate,
+                  notes: finalNotes,
+                  session: sessionDisplay,
+                  order: modalPatient.order,
+                  signatureObtained: modalPatient.rejectedTreatment ? modalPatient.signatureObtained : undefined, // Only set for rejected treatments
+                  heilmittel: modalPatient.isBlankoVO ? selectedHeilmittel[modalPatient.id] : undefined, // Include Heilmittel for Blanko VO patients
+                };
+              })()
             ]
           };
         }
@@ -1637,16 +2386,35 @@ export default function TreatmentDocumentationV2Wireframe() {
 
       setPatients(updatedPatients);
       
-      // Show toast notification
-      const rejectedCount = modalPatients.filter(p => !('isBreak' in p) && (p as Patient).rejectedTreatment).length;
+      // Show toast notification with more detailed feedback
       const treatedSuccessfullyCount = modalPatients.filter(p => !('isBreak' in p) && !(p as Patient).rejectedTreatment).length;
+      const rejectedWithSignatureCount = modalPatients.filter(p => 
+        !('isBreak' in p) && (p as Patient).rejectedTreatment && (p as Patient).signatureObtained
+      ).length;
+      const rejectedWithoutSignatureCount = modalPatients.filter(p => 
+        !('isBreak' in p) && (p as Patient).rejectedTreatment && !(p as Patient).signatureObtained
+      ).length;
+      const totalRejectedCount = rejectedWithSignatureCount + rejectedWithoutSignatureCount;
 
-      if (rejectedCount > 0 && treatedSuccessfullyCount > 0) {
-        addToast(`Treatments updated: ${treatedSuccessfullyCount} successful, ${rejectedCount} rejected.`, "info");
-      } else if (rejectedCount > 0) {
-        addToast(`${rejectedCount} treatment${rejectedCount > 1 ? 's' : ''} marked as Rejected.`, "info");
-      } else if (treatedSuccessfullyCount > 0) {
-        addToast(`${treatedSuccessfullyCount} patient${treatedSuccessfullyCount > 1 ? 's' : ''} marked as Treated.`, "success");
+      // Create a detailed message
+      if (treatedSuccessfullyCount > 0 || totalRejectedCount > 0) {
+        let message = '';
+        const parts = [];
+        
+        if (treatedSuccessfullyCount > 0) {
+          parts.push(`${treatedSuccessfullyCount} successful treatment${treatedSuccessfullyCount > 1 ? 's' : ''}`);
+        }
+        
+        if (rejectedWithSignatureCount > 0) {
+          parts.push(`${rejectedWithSignatureCount} rejected with signature (counted)`);
+        }
+        
+        if (rejectedWithoutSignatureCount > 0) {
+          parts.push(`${rejectedWithoutSignatureCount} rejected without signature (not counted)`);
+        }
+        
+        message = `Treatments updated: ${parts.join(', ')}.`;
+        addToast(message, "info");
       }
       
       // Switch to active-patients tab after marking patients as treated
@@ -1844,6 +2612,58 @@ export default function TreatmentDocumentationV2Wireframe() {
               />
             </div>
 
+            {/* Heilmittel and Duration - Only for Blanko VO patients */}
+            {patient.isBlankoVO && (
+              <div className="mb-4 grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">
+                    Heilmittel <span className="text-red-500">*</span>
+                    <span className="text-xs text-orange-600 ml-2">(Required for Blanko VO)</span>
+                  </label>
+                  <SearchableDropdown
+                    options={BLANKO_VO_HEILMITTEL}
+                    value={selectedHeilmittel[patient.id] || ''}
+                    onChange={(value) => updatePatientHeilmittel(patient.id, value)}
+                    placeholder="Search and select Heilmittel..."
+                    hasError={heilmittelErrors[patient.id] || false}
+                  />
+                  {heilmittelErrors[patient.id] && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Heilmittel selection is required for Blanko VO patients
+                    </p>
+                  )}
+                </div>
+                
+                <div>
+                  <label className="text-sm text-gray-600 block mb-1">
+                    Duration <span className="text-red-500">*</span>
+                    <span className="text-xs text-orange-600 ml-2">(Required for Blanko VO)</span>
+                  </label>
+                  <select
+                    value={selectedDuration[patient.id] || ''}
+                    onChange={(e) => updatePatientDuration(patient.id, Number(e.target.value))}
+                    className={`border rounded-md py-2 px-4 w-full text-sm focus:outline-none focus:ring-2 ${
+                      durationErrors[patient.id] 
+                        ? 'border-red-500 focus:border-red-500 focus:ring-red-500' 
+                        : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
+                    } focus:border-transparent`}
+                  >
+                    <option value="">Select Duration...</option>
+                    {durationOptions.map(duration => (
+                      <option key={duration} value={duration}>
+                        {duration} minutes
+                      </option>
+                    ))}
+                  </select>
+                  {durationErrors[patient.id] && (
+                    <p className="text-red-500 text-xs mt-1">
+                      Duration selection is required for Blanko VO patients
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Suggested Notes - REMOVED */}
             {/* 
             <div className="mb-4">
@@ -1886,6 +2706,19 @@ export default function TreatmentDocumentationV2Wireframe() {
                 />
                 Patient Rejected Treatment
               </label>
+              
+              {/* Signature Obtained Checkbox - only visible when rejection is checked */}
+              {!!patient.rejectedTreatment && (
+                <label className="flex items-center text-sm text-gray-700 mt-2 ml-6">
+                  <input 
+                    type="checkbox"
+                    checked={!!patient.signatureObtained}
+                    onChange={(e) => updateSignatureObtained(patient.id, e.target.checked)}
+                    className="mr-2 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  wurde so viel Zeit investiert, dass eine Unterschrift auf der VO eingeholt wird?
+                </label>
+              )}
             </div>
           </div>
         )}
@@ -2110,7 +2943,7 @@ export default function TreatmentDocumentationV2Wireframe() {
                   <div>
                     <div className="font-medium">{patient.name}</div>
                     <div className="text-sm text-gray-600">
-                      Prescription: {patient.prescription} | Treatment: {patient.completedTreatments}/{patient.totalTreatments}
+                      Prescription: {patient.prescription} | Treatment: {patient.isBlankoVO ? <>{patient.completedTreatments}/<span className="font-bold">BV</span></> : `${patient.completedTreatments}/${patient.totalTreatments}`}
                     </div>
                   </div>
                 </div>
@@ -2143,46 +2976,7 @@ export default function TreatmentDocumentationV2Wireframe() {
     </div>
   )}
 
-  // Function to handle opening "Keine Folge-VO bestellen" modal
-  const openKeineFolgeVoModal = (patient: Patient) => {
-    setSelectedPatientForFolgeVo(patient);
-    setKeineFolgeVoReason(''); // Reset reason when opening modal
-    setIsKeineFolgeVoModalOpen(true);
-  };
-
-  // Function to handle closing "Keine Folge-VO bestellen" modal
-  const closeKeineFolgeVoModal = () => {
-    setSelectedPatientForFolgeVo(null);
-    setIsKeineFolgeVoModalOpen(false);
-    setKeineFolgeVoReason(''); // Clear reason when closing
-  };
-
-  // Function to handle confirming "Keine Folge-VO bestellen"
-  const confirmKeineFolgeVo = () => {
-    if (selectedPatientForFolgeVo) {
-      const updatedPatients = patients.map(p =>
-        p.id === selectedPatientForFolgeVo.id ? { 
-          ...p, 
-          fvoStatus: "Keine Folge-VO", // Set F.VO Status to "Keine Folge-VO"
-          voDisplayStatus: "Aktiv", // Explicitly set VO Status to "Aktiv" to ensure it remains visible
-          voRawCancellationReason: keineFolgeVoReason // Store reason
-        } : p
-      );
-      setPatients(updatedPatients);
-
-      // Add a log entry for this action
-      addLogToPatient(
-        selectedPatientForFolgeVo.id,
-        'FolgeVO',
-        'Keine Folge-VO bestellen',
-        keineFolgeVoReason || undefined
-      );
-      
-      const reasonText = keineFolgeVoReason ? ` Grund: ${keineFolgeVoReason}` : '';
-      addToast(`${selectedPatientForFolgeVo.name}: Folgerezept-Bestellung storniert.${reasonText}`, 'info');
-      closeKeineFolgeVoModal();
-    }
-  };
+  // Removed modal functions for simplified prototype
 
   // Helper function to add a log entry to a patient
   const addLogToPatient = (
@@ -2247,122 +3041,129 @@ export default function TreatmentDocumentationV2Wireframe() {
     );
   };
 
-  // Function to handle opening "Abbrechen VO" modal
-  const openAbbrechenVoModal = (patient: Patient) => {
-    setSelectedPatientForAbbrechenVo(patient);
-    setAbbrechenReason(''); // Reset reason
-    setCustomAbbrechenReason(''); // Reset custom reason
-    setIsAbbrechenVoModalOpen(true);
+  // Removed all modal functions for simplified prototype
+
+  // Function to open PDF preview
+  const openPdfPreview = (patient: Patient, formData: TherapyReportForm) => {
+    setPdfData({ patient, formData });
+    setIsPdfPreviewOpen(true);
   };
 
-  // Function to handle closing "Abbrechen VO" modal
-  const closeAbbrechenVoModal = () => {
-    setIsAbbrechenVoModalOpen(false);
-    setSelectedPatientForAbbrechenVo(null);
-    setAbbrechenReason('');
-    setCustomAbbrechenReason('');
-    setWillOrderNewVO('No'); // Reset the new VO ordering choice
+  // Function to close PDF preview
+  const closePdfPreview = () => {
+    setIsPdfPreviewOpen(false);
+    setPdfData(null);
+    setPdfViewMode('save');
   };
 
-  // Function to handle confirming "Abbrechen VO"
-  const confirmAbbrechenVo = () => {
-    if (selectedPatientForAbbrechenVo) {
-      let fullReason = abbrechenReason;
-      if (abbrechenReason === 'Sonstiges') {
-        fullReason = `Sonstiges: ${customAbbrechenReason}`;
-      }
-
-      // Update patient details
-      const updatedPatient = {
-        ...selectedPatientForAbbrechenVo,
-        voDisplayStatus: 'Abgebrochen',
-        voCancellationReason: fullReason,
-        voRawCancellationReason: abbrechenReason, // Store the raw selected reason
-        fvoStatus: willOrderNewVO === 'Yes' ? 'Bestellen' : 'Keine Folge-VO', // Set F.VO Status based on radio selection
-        status: "Inactive", // Set overall patient status to Inactive
-        selected: false,
-      };
-
-      // Add the log entry to the updated patient
-      const logId = nextLogId;
-      const newLog: VOLog = {
-        id: logId,
-        type: 'Cancellation',
-        timestamp: new Date().toISOString(),
-        description: 'Verordnung Abbrechen',
-        details: `${fullReason}${willOrderNewVO === 'Yes' ? ' - New VO will be ordered' : ' - No new VO will be ordered'}`
-      };
-      
-      // Include the log in the updated patient
-      const patientWithLog = {
-        ...updatedPatient,
-        voLogs: updatedPatient.voLogs ? [...updatedPatient.voLogs, newLog] : [newLog]
-      };
-      
-      // Increment the log ID for next time
-      setNextLogId(prev => prev + 1);
-
-      // Remove from active patients
-      setPatients(prevPatients => prevPatients.filter(p => p.id !== selectedPatientForAbbrechenVo.id));
-      
-      // Add to inactive patients
-      setInactivePatients(prevInactive => [patientWithLog, ...prevInactive].sort((a, b) => a.name.localeCompare(b.name)));
-      
-      const newVoStatus = willOrderNewVO === 'Yes' ? ' New VO will be ordered.' : ' No new VO will be ordered.';
-      addToast(`${selectedPatientForAbbrechenVo.name}: Verordnung wurde abgebrochen (${fullReason}).${newVoStatus} Patient zu Inaktive verschoben.`, 'info');
-      closeAbbrechenVoModal();
-      // Reset selection count as the patient is moved
-      setSelectedPatientIds([]); 
+  // Function to view saved PDF
+  const viewSavedPdf = (patient: Patient) => {
+    const savedReport = savedTherapyReports[patient.id];
+    if (savedReport) {
+      setPdfData(savedReport);
+      setPdfViewMode('view');
+      setIsPdfPreviewOpen(true);
     }
   };
 
-  // Function to handle opening "Transfer Patient" modal
-  const openTransferPatientModal = (patient: Patient) => {
-    setSelectedPatientForTransfer(patient);
-    setSelectedTherapist(''); // Reset selected therapist
-    setIsTransferModalOpen(true);
+  // Function to handle PDF save
+  const handlePdfSave = () => {
+    if (!pdfData) return;
+    
+    const { patient, formData } = pdfData;
+    
+    // Save the therapy report data
+    setSavedTherapyReports(prev => ({
+      ...prev,
+      [patient.id]: { patient, formData }
+    }));
+    
+    // Update patient's therapiebericht status to "Created"
+    setPatients(prev => prev.map(p => 
+      p.id === patient.id 
+        ? { ...p, therapiebericht: "Created" as const }
+        : p
+    ));
+    
+    // Also update inactive patients if needed
+    setInactivePatients(prev => prev.map(p => 
+      p.id === patient.id 
+        ? { ...p, therapiebericht: "Created" as const }
+        : p
+    ));
+    
+    const fileName = `Therapiebericht_${patient.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`;
+    addToast(`Report for VO ${patient.prescription} has been created and sent to Admin`, 'success');
+    closePdfPreview();
   };
 
-  // Function to handle closing "Transfer Patient" modal
-  const closeTransferModal = () => {
-    setIsTransferModalOpen(false);
-    setSelectedPatientForTransfer(null);
-    setSelectedTherapist('');
-  };
-
-  // Function to handle confirming patient transfer
-  const confirmTransfer = () => {
-    if (selectedPatientForTransfer && selectedTherapist) {
-      // Get the previous therapist for the log
-      const previousTherapist = selectedPatientForTransfer.therapeut;
+  // Function to handle therapy report form submission
+  const handleTherapyReportSubmit = () => {
+    // Clear previous errors
+    setTherapyReportErrors({});
+    setTherapyReportModalError("");
+    
+    // Validate form
+    const { therapyType, startDate, endDate, currentFindings, specialFeatures } = therapyReportForm;
+    const errors: {[key: string]: string} = {};
+    
+    // Check required fields
+    if (!therapyType) errors.therapyType = "Therapy type is required";
+    if (!startDate) errors.startDate = "Start date is required";
+    if (!endDate) errors.endDate = "End date is required";
+    if (!currentFindings.trim()) errors.currentFindings = "Current therapy status is required";
+    if (!specialFeatures.trim()) errors.specialFeatures = "Special features are required";
+    
+    // Check date range (end date should be after start date)
+    if (startDate && endDate && endDate <= startDate) {
+      errors.endDate = "End date must be after start date";
+    }
+    
+    // If there are errors, show them
+    if (Object.keys(errors).length > 0) {
+      setTherapyReportErrors(errors);
+      setTherapyReportModalError("Please fix the highlighted fields above");
+      return;
+    }
+    
+    // Form is valid - proceed with PDF generation
+    if (therapyReportPatient) {
+      // Open PDF preview in save mode
+      setPdfViewMode('save');
+      openPdfPreview(therapyReportPatient, therapyReportForm);
       
-      // Update the patient's therapeut
-      const updatedPatients = patients.map(p =>
-        p.id === selectedPatientForTransfer.id ? { 
-          ...p, 
-          therapeut: selectedTherapist // Update to the new therapist
-        } : p
-      );
-      setPatients(updatedPatients);
-
-      // Add a log entry for this action
-      addLogToPatient(
-        selectedPatientForTransfer.id,
-        'StatusChange', // Using StatusChange type for the transfer
-        'Patient Transfer',
-        `Transferred from ${previousTherapist} to ${selectedTherapist}`
-      );
-      
-      // Show a success toast notification
-      addToast(`${selectedPatientForTransfer.name}: Successfully transferred from ${previousTherapist} to ${selectedTherapist}.`, 'success');
-      
-      // Close the modal
-      closeTransferModal();
+      // Reset form and close modal
+      setTherapyReportForm({
+        therapyType: "",
+        startDate: null,
+        endDate: null,
+        currentFindings: "",
+        specialFeatures: "",
+        treatmentAccordingToPrescription: true,
+        changeTherapyFrequency: false,
+        changeIndividualTherapy: false,
+        changeGroupTherapy: false,
+        continuationOfTherapyRecommended: true
+      });
+      closeTherapyReportModal();
     }
   };
+
+  // State for therapy report form validation
+  const [therapyReportErrors, setTherapyReportErrors] = useState<{[key: string]: string}>({});
+  const [therapyReportModalError, setTherapyReportModalError] = useState<string>("");
+  
+  // State for PDF preview modal
+  const [isPdfPreviewOpen, setIsPdfPreviewOpen] = useState(false);
+  const [pdfData, setPdfData] = useState<{patient: Patient, formData: TherapyReportForm} | null>(null);
+  const [showAnnotations, setShowAnnotations] = useState(true);
+  const [pdfViewMode, setPdfViewMode] = useState<'save' | 'view'>('save');
+  
+  // State for saved therapy reports
+  const [savedTherapyReports, setSavedTherapyReports] = useState<{[patientId: number]: {patient: Patient, formData: TherapyReportForm}}>({});
 
   return (
-    <WireframeLayout title="Treatment Termination & Rejection" username="User Therapist" userInitials="UT" showSidebar={false}>
+    <WireframeLayout title="Blanko VOs + Arztbericht (Therapist)" username="User Therapist" userInitials="UT" showSidebar={false}>
       <div className="max-w-full mx-auto bg-[#f8f9fa] rounded-lg shadow p-4">
         {/* Tab Navigation */}
         <div className="mb-4 border-b">
@@ -2375,7 +3176,7 @@ export default function TreatmentDocumentationV2Wireframe() {
               }`}
               onClick={() => setActiveTab('active-patients')}
             >
-              Active Patients
+              Open Prescriptions
             </button>
             <button
               className={`py-3 px-4 font-medium ${
@@ -2385,7 +3186,7 @@ export default function TreatmentDocumentationV2Wireframe() {
               }`}
               onClick={() => setActiveTab('inactive-patients')}
             >
-              Inactive Patients
+              Closed Prescriptions
             </button>
             <button
               className={`py-3 px-4 font-medium ${
@@ -2403,7 +3204,7 @@ export default function TreatmentDocumentationV2Wireframe() {
         {/* Treatment Documentation Header - shows active tab name */}
         <div className="mb-4">
           <h1 className="text-2xl font-semibold">
-            {activeTab === 'active-patients' ? 'Active Patients' : activeTab === 'inactive-patients' ? 'Inactive Patients' : 'Calendar'}
+            {activeTab === 'active-patients' ? 'Open Prescriptions' : activeTab === 'inactive-patients' ? 'Closed Prescriptions' : 'Calendar'}
           </h1>
         </div>
         
@@ -2430,39 +3231,24 @@ export default function TreatmentDocumentationV2Wireframe() {
                   </WireframeButton>
                 )}
               </div>
-              {/* New Buttons: Keine Folge-VO bestellen and Abbrechen */}
-              {activeTab === 'active-patients' && selectedPatientCount === 1 && (
+              {/* Visual Indicator Buttons - No functionality for prototype */}
+              {activeTab === 'active-patients' && selectedPatientCount >= 1 && (
                 <div className="flex items-center space-x-3">
                   <button
                     className="px-4 py-2 border border-orange-500 text-orange-500 bg-white hover:bg-orange-50 rounded-md text-sm font-medium"
-                    onClick={() => {
-                      const selectedPatient = patients.find(p => p.selected);
-                      if (selectedPatient) {
-                        openKeineFolgeVoModal(selectedPatient);
-                      }
-                    }}
+                    disabled
                   >
                     Keine Folge-VO bestellen
                   </button>
                   <button
                     className="px-4 py-2 border border-red-600 bg-red-600 text-white hover:bg-red-700 rounded-md text-sm font-medium"
-                    onClick={() => {
-                        const selectedPatient = patients.find(p => p.selected); // Correctly find the single selected patient
-                        if (selectedPatient) {
-                            openAbbrechenVoModal(selectedPatient);
-                        }
-                    }}
+                    disabled
                   >
                     Abbrechen VO
                   </button>
                   <button
                     className="px-4 py-2 border border-blue-600 bg-blue-600 text-white hover:bg-blue-700 rounded-md text-sm font-medium"
-                    onClick={() => {
-                        const selectedPatient = patients.find(p => p.selected);
-                        if (selectedPatient) {
-                            openTransferPatientModal(selectedPatient);
-                        }
-                    }}
+                    disabled
                   >
                     Transfer Patient
                   </button>
@@ -2471,16 +3257,15 @@ export default function TreatmentDocumentationV2Wireframe() {
             </div>
 
             {/* Table Headers */}
-            <div className="grid grid-cols-13 gap-4 py-3 px-4 bg-gray-100 text-gray-700 font-medium text-sm">
+            <div className="grid grid-cols-12 gap-4 py-3 px-4 bg-gray-100 text-gray-700 font-medium text-sm">
               <div className="col-span-1"></div>
               <div className="col-span-1">Name Patient</div>
               <div className="col-span-1">Facility</div>
-              <div className="col-span-1">Last Treatment (Date)</div>
-              <div className="col-span-1">Treatments WTD</div>
-              <div className="col-span-1">Therapeut</div>
+              <div className="col-span-1">Heilmittel</div> {/* New Heilmittel column */}
               <div className="col-span-1">VO Nr.</div>
               <div className="col-span-1">VO Status</div> {/* New Column Header */}
               <div className="col-span-1">Status VO (#/#)</div>
+              <div className="col-span-1">Therapiebericht</div> {/* NEW: Therapy Report Column */}
               <div className="col-span-1">Doctor</div>
               <div className="col-span-1">F.VO Status</div> 
               <div className="col-span-1">Logs</div> {/* New Logs column */}
@@ -2491,7 +3276,7 @@ export default function TreatmentDocumentationV2Wireframe() {
             {(activeTab === 'active-patients' ? patients : inactivePatients).map((patient) => (
               <div 
                 key={patient.id} 
-                className={`grid grid-cols-13 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
+                className={`grid grid-cols-12 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
                   patient.selected ? 'bg-blue-50' 
                     : patient.treatmentStatus === "Treated" ? 'bg-green-50' 
                     : patient.treatmentStatus === "Rejected" ? 'bg-red-50' 
@@ -2509,13 +3294,19 @@ export default function TreatmentDocumentationV2Wireframe() {
                 <div className="col-span-1">{patient.name}</div>
                 <div className="col-span-1">{patient.facility}</div>
                 <div className="col-span-1">
-                  <span className={patient.treated ? 'font-bold' : ''}>
-                    {patient.lastTreatment}
-                  </span>
-                </div>
-                <div className="col-span-1">{patient.frequencyWTD}</div>
-                <div className="col-span-1">
-                  {patient.therapeut}
+                  {/* Heilmittel column */}
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-black">
+                      {patient.isBlankoVO && patient.heilmittel.includes('-BV') ? (
+                        <>
+                          {patient.heilmittel.replace('-BV', '-')}
+                          <span className="font-bold">BV</span>
+                        </>
+                      ) : (
+                        patient.heilmittel
+                      )}
+                    </span>
+                  </div>
                 </div>
                 <div className="col-span-1">
                   {patient.prescription}
@@ -2537,9 +3328,42 @@ export default function TreatmentDocumentationV2Wireframe() {
                   ) : null /* Default case */}
                 </div>
                 <div className="col-span-1">
-                  <span className={`font-medium ${patient.completedTreatments === patient.totalTreatments ? 'text-green-600' : 'text-blue-600'}`}>
-                    {patient.completedTreatments}/{patient.totalTreatments}
+                  <span className="font-medium text-black">
+                    {patient.isBlankoVO 
+                      ? <>{patient.completedTreatments}/<span className="font-bold">BV</span></> 
+                      : `${patient.completedTreatments}/${patient.totalTreatments}`
+                    }
                   </span>
+                </div>
+                <div className="col-span-1">
+                  {/* NEW: Therapiebericht Column */}
+                  {patient.therapiebericht ? (
+                    patient.therapiebericht === "Ja" ? (
+                      <button 
+                        className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                        onClick={() => openTherapyReportModal(patient)}
+                      >
+                        Ja
+                      </button>
+                    ) : patient.therapiebericht === "Created" ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-600 font-medium">Created</span>
+                        <button 
+                          className="text-blue-600 hover:text-blue-800"
+                          onClick={() => viewSavedPdf(patient)}
+                          title="View saved PDF"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <span className="text-gray-500">Nein</span>
+                    )
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
                 </div>
                 <div className="col-span-1">{patient.doctor}</div>
                 <div className="col-span-1">
@@ -2814,7 +3638,7 @@ export default function TreatmentDocumentationV2Wireframe() {
               {/* Treatment History Table */}
               <div className="border border-gray-200 rounded-lg overflow-hidden">
                 {/* Table Headers */}
-                <div className="grid grid-cols-9 gap-4 py-3 px-4 bg-gray-50 text-sm font-medium text-gray-600">
+                <div className="grid gap-4 py-3 px-4 bg-gray-50 text-sm font-medium text-gray-600 grid-cols-9">
                   <div className="col-span-1">Treatment #</div>
                   <div className="col-span-3">Treatment Date</div>
                   <div className="col-span-5">Notes</div>
@@ -2824,26 +3648,117 @@ export default function TreatmentDocumentationV2Wireframe() {
                 <div className="divide-y divide-gray-200">
                   {viewingPatient.treatmentHistory ? (
                     viewingPatient.treatmentHistory.map((entry, index) => {
-                      const isRejected = entry.session === 'Rejected' || entry.notes?.startsWith("Treatment Rejected:");
+                      // Different rejection statuses
+                      const isRejectedWithSignature = entry.session?.startsWith('Rejected-') && entry.session !== 'Rejected-NoCount' && entry.signatureObtained;
+                      const isRejectedWithoutSignature = entry.session === 'Rejected-NoCount' || (entry.session?.startsWith('Rejected-') && !entry.signatureObtained);
+                      const isRejected = isRejectedWithSignature || isRejectedWithoutSignature;
+                      
+                      // Note formatting
+                      let displayNotes = entry.notes || '';
+                      if (displayNotes.startsWith("Treatment Rejected:")) {
+                        displayNotes = displayNotes.replace("Treatment Rejected:", "").trim();
+                      }
+                      
+                      // Session display formatting
+                      let sessionDisplay = entry.session || '';
+                      if (sessionDisplay.startsWith('Rejected-') && sessionDisplay !== 'Rejected-NoCount') {
+                        sessionDisplay = sessionDisplay.replace('Rejected-', '');
+                      }
+                      
                       return (
                         <div 
                           key={index} 
-                          className={`grid grid-cols-9 gap-4 py-3 px-4 text-sm ${isRejected ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'}`}
+                          className={`grid gap-4 py-3 px-4 text-sm grid-cols-9 ${
+                            isRejectedWithSignature ? 'bg-orange-50 hover:bg-orange-100' : 
+                            isRejectedWithoutSignature ? 'bg-red-50 hover:bg-red-100' : 
+                            'hover:bg-gray-50'
+                          }`}
                         >
-                          <div className={`col-span-1 ${isRejected ? 'text-red-700 font-semibold' : ''}`}>{index + 1}</div>
-                          <div className={`col-span-3 ${isRejected ? 'text-red-700' : ''}`}>
-                            {entry.date}
-                            {isRejected && <span className="ml-2 px-2 py-0.5 text-xs font-semibold bg-red-200 text-red-800 rounded-full">Rejected</span>}
+                          <div className={`col-span-1 ${
+                            isRejectedWithSignature ? 'text-orange-700 font-semibold' : 
+                            isRejectedWithoutSignature ? 'text-red-700 font-semibold' : 
+                            ''
+                          }`}>
+                            {isRejectedWithoutSignature ? "-" : index + 1}
                           </div>
-                          <div className={`col-span-5 ${isRejected ? 'text-red-700' : ''}`}>{entry.notes}</div>
+                          <div className={`col-span-3 ${
+                            isRejectedWithSignature ? 'text-orange-700' : 
+                            isRejectedWithoutSignature ? 'text-red-700' : 
+                            ''
+                          }`}>
+                            <div>{entry.date}</div>
+                            {isRejectedWithSignature && (
+                              <div className="mt-1">
+                                <span className="px-2 py-0.5 text-xs font-semibold bg-orange-200 text-orange-800 rounded-full">
+                                  Rejected (Counted)
+                                </span>
+                              </div>
+                            )}
+                            {isRejectedWithoutSignature && (
+                              <div className="mt-1">
+                                <span className="px-2 py-0.5 text-xs font-semibold bg-red-200 text-red-800 rounded-full">
+                                  Rejected (Not Counted)
+                                </span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className={`col-span-5 ${
+                            isRejectedWithSignature ? 'text-orange-700' : 
+                            isRejectedWithoutSignature ? 'text-red-700' : 
+                            ''
+                          }`}>
+                            {isRejected ? (
+                              <>
+                                <div className="font-medium mb-1">Treatment was rejected by patient</div>
+                                {displayNotes && (
+                                  <div>
+                                    {viewingPatient.isBlankoVO && entry.heilmittel ? (
+                                      <>
+                                        <span className="font-bold">{entry.heilmittel}</span>: {displayNotes}
+                                      </>
+                                    ) : (
+                                      displayNotes
+                                    )}
+                                  </div>
+                                )}
+                                {isRejectedWithSignature && (
+                                  <div className="mt-1 text-xs bg-orange-100 px-2 py-1 rounded inline-block">
+                                    ✓ Signature was obtained - Session {sessionDisplay}
+                                  </div>
+                                )}
+                                {isRejectedWithoutSignature && (
+                                  <div className="mt-1 text-xs bg-red-100 px-2 py-1 rounded inline-block">
+                                    ✗ No signature obtained - Not counted towards total
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              viewingPatient.isBlankoVO && entry.heilmittel ? (
+                                <>
+                                  <span className="font-bold">{entry.heilmittel}</span>: {displayNotes}
+                                </>
+                              ) : (
+                                displayNotes
+                              )
+                            )}
+                          </div>
                         </div>
                       );
                     })
                   ) : (
-                    <div className="grid grid-cols-9 gap-4 py-3 px-4 text-sm">
+                    <div className="grid gap-4 py-3 px-4 text-sm grid-cols-9">
                       <div className="col-span-1">1</div>
                       <div className="col-span-3">{viewingPatient.lastTreatment}</div>
-                      <div className="col-span-5">{viewingPatient.notes}</div>
+                      <div className="col-span-5">
+                        {viewingPatient.isBlankoVO && viewingPatient.heilmittel ? (
+                          <>
+                            <span className="font-bold">{viewingPatient.heilmittel}</span>: {viewingPatient.notes}
+                          </>
+                        ) : (
+                          viewingPatient.notes
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -2907,7 +3822,7 @@ export default function TreatmentDocumentationV2Wireframe() {
                       <div>
                         <div className="font-medium">{patient.name}</div>
                         <div className="text-sm text-gray-600">
-                          Prescription: {patient.prescription} | Treatment: {patient.completedTreatments}/{patient.totalTreatments}
+                          Prescription: {patient.prescription} | Treatment: {patient.isBlankoVO ? <>{patient.completedTreatments}/<span className="font-bold">BV</span></> : `${patient.completedTreatments}/${patient.totalTreatments}`}
                         </div>
                       </div>
                     </div>
@@ -2940,340 +3855,624 @@ export default function TreatmentDocumentationV2Wireframe() {
         </div>
       )}
 
-      {/* "Keine Folge-VO bestellen" Confirmation Modal */}
-      {isKeineFolgeVoModalOpen && selectedPatientForFolgeVo && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto">
-            {/* Modal Header */}
-            <div className="py-4 px-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">Keine Folge-VO bestellen Bestätigen</h2>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6">
-              <div className="bg-gray-50 p-4 rounded-md mb-4">
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">Patient:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForFolgeVo.name}</p>
-                </div>
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">VO#:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForFolgeVo.prescription}</p>
-                </div>
+              {/* PDF Preview Modal */}
+        {isPdfPreviewOpen && pdfData && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+              {/* Modal Header */}
+              <div className="border-b border-gray-200 px-6 py-4 flex justify-between items-center">
                 <div>
-                  <span className="text-sm font-medium text-gray-700">Arzt:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForFolgeVo.doctor}</p>
+                  <h3 className="text-lg font-medium text-gray-900">
+                    {pdfViewMode === 'save' ? 'PDF Vorschau - Therapiebericht' : 'Gespeicherter Therapiebericht'}
+                  </h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Patient: {pdfData.patient.name}
+                  </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAnnotations(!showAnnotations)}
+                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+                    showAnnotations 
+                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200' 
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  📋 {showAnnotations ? 'Hide' : 'Show'} Dev Annotations
+                </button>
               </div>
-              
-              {/* New Reason Input Field */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Keine Folge-VO Reason:
-                </label>
-                <AutoResizeTextarea
-                  value={keineFolgeVoReason}
-                  onChange={(e) => setKeineFolgeVoReason(e.target.value)}
-                  placeholder="Enter reason for no follow-up prescription..."
-                  className="w-full border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-                />
-              </div>
-              
-              <p className="text-sm text-gray-600 mb-2">
-                Automatic renewal for this prescription will be cancelled and no follow-up prescription will be ordered.
-              </p>
-              <p className="text-sm text-gray-600">
-                The current prescription will remain active until completion.
-              </p>
-            </div>
 
-            {/* Modal Footer */}
-            <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
-              <button 
-                onClick={() => {
-                  setIsKeineFolgeVoModalOpen(false);
-                  setSelectedPatientForFolgeVo(null);
-                }}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={() => {
-                  confirmKeineFolgeVo();
-                  setIsKeineFolgeVoModalOpen(false);
-                  setSelectedPatientForFolgeVo(null);
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* "Abbrechen VO" Confirmation Modal - THIS IS THE NEW MODAL JSX */}
-      {isAbbrechenVoModalOpen && selectedPatientForAbbrechenVo && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-auto flex flex-col max-h-[90vh]">
-            {/* Modal Header */}
-            <div className="py-4 px-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">Verordnung Abbrechen</h2>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto">
-              <div className="bg-gray-50 p-4 rounded-md mb-6 border border-gray-200">
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">Patient:</span>
-                  <p className="text-base text-gray-900 font-semibold">{selectedPatientForAbbrechenVo.name}</p>
-                </div>
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">Einrichtung:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForAbbrechenVo.facility}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Aktuelle VO #:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForAbbrechenVo.prescription}</p>
-                </div>
-                 <div>
-                  <span className="text-sm font-medium text-gray-700">Arzt:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForAbbrechenVo.doctor}</p>
-                </div>
-              </div>
-              
-              <div className="space-y-3 mb-4">
-                <p className="font-medium text-gray-700">Reason for Termination:</p>
-                {[
-                  "Patient declined further treatment",
-                  "Patient no longer at facility",
-                  "Treatment goals achieved",
-                  "Patient deceased",
-                  "Other"
-                ].map(reason => {
-                  // Original German reasons for logic, English for display
-                  const germanReasonMap: { [key: string]: string } = {
-                    "Patient declined further treatment": "Patient hat weitere Behandlung abgelehnt",
-                    "Patient no longer at facility": "Patient nicht mehr in Einrichtung",
-                    "Treatment goals achieved": "Behandlungsziele erreicht",
-                    "Patient deceased": "Patient verstorben",
-                    "Other": "Sonstiges"
-                  };
-                  const valueForRadio = germanReasonMap[reason] || reason; // Fallback to English if somehow not mapped
-
-                  return (
-                    <label key={reason} className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-gray-50 rounded-md">
-                      <input
-                        type="radio"
-                        name="abbrechenReason"
-                        value={valueForRadio} // Use original German value for state
-                        checked={abbrechenReason === valueForRadio}
-                        onChange={(e) => setAbbrechenReason(e.target.value)}
-                        className="form-radio h-4 w-4 text-blue-600 transition duration-150 ease-in-out focus:ring-blue-500 border-gray-300"
-                      />
-                      <span className="text-gray-700 text-sm">{reason}</span> {/* Display English reason */}
-                    </label>
-                  );
-                })}
-                {abbrechenReason === "Sonstiges" && (
-                  <div className="pl-6 pt-2">
-                    <AutoResizeTextarea
-                      value={customAbbrechenReason}
-                      onChange={(e) => setCustomAbbrechenReason(e.target.value)}
-                      placeholder="Please specify other reason..." // Translated placeholder
-                      className="mt-1 border-gray-300 focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 rounded-md shadow-sm w-full text-sm min-h-[60px]"
-                    />
+              {/* Modal Body - PDF Preview */}
+              <div className="px-6 py-4 max-h-[calc(90vh-160px)] overflow-y-auto">
+                <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4 min-h-[600px] text-black font-sans">
+                  {/* Professional Letterhead */}
+                  <div className="text-center border-b border-gray-300 pb-6">
+                    <div className="mb-4">
+                      <h1 className="text-xl font-bold text-black">Therapios GmbH</h1>
+                      <h2 className="text-lg font-normal text-black">{showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Therapy Type from Prescription Form</span>} Occupational Therapy</h2>
+                    </div>
+                    <div className="text-sm text-black">
+                      <p>Oderstr. 66</p>
+                      <p>14513 Teltow</p>
+                    </div>
+                    <div className="absolute top-8 right-8 text-sm text-black">
+                      info@therapios.de
+                    </div>
                   </div>
+
+                  <div className="grid grid-cols-2 gap-8">
+                    <div className="space-y-1">
+                      <p className="text-sm text-black">Therapios GmbH, Oderstr. 66, 14513 Teltow</p>
+                    </div>
+                    <div></div>
+                  </div>
+
+                  {/* To Section */}
+                  <div className="grid grid-cols-2 gap-8 py-4">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-black">To:</p>
+                      <p className="text-sm text-black">{pdfData.patient.doctor}</p>
+                      <p className="text-sm text-black">
+                        {/* DEV NOTE: Doctor address will be sourced from Rezepte file */}
+                        {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Address from Rezepte</span>}
+                      </p>
+                      <p className="text-sm text-black">D - 15377 Märkische Höhe</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-black">Doctor's Fax Number:</p>
+                    </div>
+                  </div>
+
+                  <div className="text-center py-2">
+                    <span className="text-xl font-bold">-</span>
+                  </div>
+
+                  <div className="text-right py-2">
+                    <p className="text-sm text-black">{new Date().toLocaleDateString('de-DE', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  </div>
+
+                  {/* Document Title */}
+                  <div className="text-center py-4">
+                    <h2 className="text-lg font-bold text-black">
+                      Therapy Report to {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Doctor from Prescription Form</span>} {pdfData.patient.doctor} from {new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                    </h2>
+                  </div>
+
+                  {/* Patient Information */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-black">for the patient:</p>
+                    <p className="text-sm text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Patient Name from Prescription Form</span>} {pdfData.patient.name}, born: 
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs ml-1">📋 DEV: DOB from Rezepte</span>} 10.07.1934
+                    </p>
+                    <p className="text-sm text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Address from Rezepte</span>} Uhlandstr. 18-19
+                    </p>
+                    <p className="text-sm text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Postal from Rezepte</span>} 10553 Berlin/Tel.
+                    </p>
+                    <p className="text-sm text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Insurance from Rezepte</span>} Health insurance number, Berlin, Insurance number: 007594905
+                    </p>
+                  </div>
+
+                  {/* Prescription Information */}
+                  <div className="space-y-2 py-4">
+                    <p className="text-sm text-black">
+                      Your prescription from {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Date from Rezepte</span>} 17.12.2024 with diagnosis {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Diagnosis from Rezepte</span>} F03 Non-specified dementia (-).
+                    </p>
+                  </div>
+
+                  {/* Treatment Period */}
+                  <div className="space-y-2">
+                    <p className="text-sm text-black">
+                      The treatment was conducted from {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Start Date from Prescription Form</span>} {pdfData.formData.startDate?.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} to {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: End Date from Prescription Form</span>} {pdfData.formData.endDate?.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}.
+                    </p>
+                  </div>
+
+                  {/* Current Therapy Status */}
+                  <div className="space-y-2 py-4">
+                    <p className="text-sm font-semibold text-black">Current therapy status (current findings)</p>
+                    <p className="text-sm text-black whitespace-pre-wrap">{showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Current Findings from Prescription Form</span>} {pdfData.formData.currentFindings}</p>
+                  </div>
+
+                  {/* Special Features */}
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-black">Special features during the treatment course</p>
+                    <p className="text-sm text-black whitespace-pre-wrap">{showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Special Features from Prescription Form</span>} {pdfData.formData.specialFeatures}</p>
+                  </div>
+
+                  {/* Treatment according to prescription */}
+                  <div className="space-y-1 py-2">
+                    <p className="text-sm font-semibold text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Treatment Requirements from Prescription Form</span>} Treatment according to prescription: {pdfData.formData.treatmentAccordingToPrescription ? 'yes' : 'no'}
+                    </p>
+                  </div>
+
+                  {/* Continuation of therapy */}
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Continuation Recommendation from Prescription Form</span>} Continuation of therapy recommended: {pdfData.formData.continuationOfTherapyRecommended ? 'yes' : 'no'}
+                    </p>
+                  </div>
+
+                  {/* Change therapy frequency */}
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Change Therapy Frequency from Prescription Form</span>} Change therapy frequency: {pdfData.formData.changeTherapyFrequency ? 'yes' : 'no'}
+                    </p>
+                  </div>
+
+                  {/* Change to individual therapy */}
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Change Individual Therapy from Prescription Form</span>} Change to individual therapy: {pdfData.formData.changeIndividualTherapy ? 'yes' : 'no'}
+                    </p>
+                  </div>
+
+                  {/* Change to group therapy */}
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-black">
+                      {showAnnotations && <span className="bg-yellow-100 px-1 rounded text-xs">📋 DEV: Change Group Therapy from Prescription Form</span>} Change to group therapy: {pdfData.formData.changeGroupTherapy ? 'yes' : 'no'}
+                    </p>
+                  </div>
+
+                  {/* Professional Footer */}
+                  <div className="text-center pt-8">
+                    <p className="text-sm text-black">With friendly greetings</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="border-t border-gray-200 px-6 py-4 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={closePdfPreview}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Close
+                </button>
+                {pdfViewMode === 'save' && (
+                  <button
+                    type="button"
+                    onClick={handlePdfSave}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Complete Report
+                  </button>
                 )}
               </div>
-              
-              {/* New Radio Buttons for ordering a new VO */}
-              <div className="space-y-3 mt-6">
-                <p className="font-medium text-gray-700">Will a new VO be ordered for this patient?</p>
-                <label className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-gray-50 rounded-md">
-                  <input
-                    type="radio"
-                    name="willOrderNewVO"
-                    value="Yes"
-                    checked={willOrderNewVO === 'Yes'}
-                    onChange={() => setWillOrderNewVO('Yes')}
-                    className="form-radio h-4 w-4 text-blue-600 transition duration-150 ease-in-out focus:ring-blue-500 border-gray-300"
-                  />
-                  <span className="text-gray-700 text-sm">Yes</span>
-                </label>
-                <label className="flex items-center space-x-2 cursor-pointer p-2 hover:bg-gray-50 rounded-md">
-                  <input
-                    type="radio"
-                    name="willOrderNewVO"
-                    value="No"
-                    checked={willOrderNewVO === 'No'}
-                    onChange={() => setWillOrderNewVO('No')}
-                    className="form-radio h-4 w-4 text-blue-600 transition duration-150 ease-in-out focus:ring-blue-500 border-gray-300"
-                  />
-                  <span className="text-gray-700 text-sm">No</span>
-                </label>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
-              <WireframeButton variant="secondary" onClick={closeAbbrechenVoModal}>Close</WireframeButton> {/* Translated button text */}
-              <WireframeButton 
-                variant="primary" 
-                onClick={confirmAbbrechenVo}
-                disabled={!abbrechenReason || (abbrechenReason === 'Sonstiges' && !customAbbrechenReason.trim())}
-                className="bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white"
-              >
-                Cancel Prescription & Move Patient to Inactive {/* Translated button text */}
-              </WireframeButton>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Prescription Logs Modal */}
-      {isLogsModalOpen && patientForLogs && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg mx-auto flex flex-col max-h-[90vh]">
+        {/* Therapy Report Modal */}
+        {isTherapyReportModalOpen && therapyReportPatient && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 overflow-hidden">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl mx-4 max-h-[90vh] flex flex-col">
             {/* Modal Header */}
-            <div className="py-4 px-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">Prescription Logs - {patientForLogs.name}</h2>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto">
-              {patientForLogs.voLogs && patientForLogs.voLogs.length > 0 ? (
-                <div className="space-y-4">
-                  {patientForLogs.voLogs.map((log, index) => {
-                    // Format timestamp for display
-                    const logDate = new Date(log.timestamp);
-                    const formattedDate = logDate.toLocaleString('en-US', {
-                      month: 'numeric',
-                      day: 'numeric',
-                      year: 'numeric',
-                      hour: 'numeric',
-                      minute: 'numeric',
-                      second: 'numeric',
-                      hour12: true
-                    });
-
-                    return (
-                      <div key={log.id} className="bg-gray-50 rounded-lg p-4 shadow-sm">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-medium">
-                              {log.type === 'StatusChange' && 'Statusänderung'}
-                              {log.type === 'FolgeVO' && 'Keine Folge-VO'}
-                              {log.type === 'Cancellation' && 'Verordnung Abbrechen'}
-                            </div>
-                            <div className="mt-1 text-gray-700">{log.description}</div>
-                            {log.details && (
-                              <div className="mt-1 text-gray-600 text-sm">{log.details}</div>
-                            )}
-                          </div>
-                          <div className="text-gray-500 text-sm">{formattedDate}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  No logs available for this patient.
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="flex justify-end p-4 border-t border-gray-200">
+            <div className="bg-white text-gray-800 py-4 px-6 rounded-t-lg flex justify-between items-center border-b">
+              <h2 className="text-xl font-semibold">
+                Therapiebericht - {therapyReportPatient.name}
+              </h2>
               <button 
-                onClick={() => toggleLogsModal(null)}
-                className="px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                onClick={closeTherapyReportModal}
+                className="text-gray-500 hover:text-gray-700"
               >
-                Close
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* Transfer Patient Modal */}
-      {isTransferModalOpen && selectedPatientForTransfer && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-auto">
-            {/* Modal Header */}
-            <div className="py-4 px-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-800">Transfer Patient</h2>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6">
-              {/* Patient Information */}
-              <div className="bg-gray-50 p-4 rounded-md mb-6 border border-gray-200">
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">Patient:</span>
-                  <p className="text-base text-gray-900 font-semibold">{selectedPatientForTransfer.name}</p>
+                            {/* Modal Body - Scrollable */}
+            <div className="p-6 overflow-y-auto flex-grow">
+              {/* Error Message Display */}
+              {therapyReportModalError && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-red-800 text-sm">{therapyReportModalError}</p>
                 </div>
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">Facility:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForTransfer.facility}</p>
-                </div>
-                <div className="mb-2">
-                  <span className="text-sm font-medium text-gray-700">VO Nr.:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForTransfer.prescription}</p>
-                </div>
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Arzt:</span>
-                  <p className="text-sm text-gray-900">{selectedPatientForTransfer.doctor}</p>
-                </div>
-              </div>
-
-              {/* Therapist Selection Dropdown */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Transfer to Therapist:
-                </label>
-                <select
-                  value={selectedTherapist}
-                  onChange={(e) => setSelectedTherapist(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="" disabled>Select a therapist</option>
-                  <option value="Therapist A">Therapist A</option>
-                  <option value="Therapist B">Therapist B</option>
-                  <option value="Therapist C">Therapist C</option>
-                </select>
-              </div>
+              )}
               
-              <p className="text-sm text-gray-600 mb-2">
-                This will transfer the patient from {selectedPatientForTransfer.therapeut} to the selected therapist.
-              </p>
+              <div className="space-y-6">
+                {/* Patient Information (Read-only) */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-medium text-gray-900 mb-3">Patient Information</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-600">Name:</span>
+                      <span className="ml-2 font-medium">{therapyReportPatient.name}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Facility:</span>
+                      <span className="ml-2 font-medium">{therapyReportPatient.facility}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Prescription:</span>
+                      <span className="ml-2 font-medium">{therapyReportPatient.prescription}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Doctor:</span>
+                      <span className="ml-2 font-medium">{therapyReportPatient.doctor}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Therapy Type Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Therapy Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={therapyReportForm.therapyType}
+                    onChange={(e) => updateTherapyReportForm('therapyType', e.target.value)}
+                    className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
+                      therapyReportErrors.therapyType 
+                        ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
+                    required
+                  >
+                    <option value="">-- Select Therapy Type --</option>
+                    <option value="Physiotherapie">Physiotherapie</option>
+                    <option value="Ergotherapie">Ergotherapie</option>
+                    <option value="Logopädie">Logopädie</option>
+                  </select>
+                </div>
+
+                {/* Date Range Selection */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Start Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Treatment Start Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={therapyReportForm.startDate ? formatDate(therapyReportForm.startDate) : ''}
+                        readOnly
+                        placeholder="Select start date"
+                        className={`w-full border rounded-md py-2 px-3 bg-white cursor-pointer ${
+                          therapyReportErrors.startDate 
+                            ? 'border-red-500' 
+                            : 'border-gray-300'
+                        }`}
+                        onClick={() => {
+                          setStartDateCalendarOpen(!startDateCalendarOpen);
+                          setEndDateCalendarOpen(false);
+                        }}
+                      />
+                      <button 
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        onClick={() => {
+                          setStartDateCalendarOpen(!startDateCalendarOpen);
+                          setEndDateCalendarOpen(false);
+                        }}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      
+                      {/* Start Date Calendar */}
+                      {startDateCalendarOpen && (
+                        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-md shadow-lg z-20">
+                          <div className="p-2 flex justify-between items-center border-b border-gray-200">
+                            <button 
+                              onClick={() => {
+                                const newMonth = startDateCalendarMonth === 0 ? 11 : startDateCalendarMonth - 1;
+                                const newYear = startDateCalendarMonth === 0 ? startDateCalendarYear - 1 : startDateCalendarYear;
+                                setStartDateCalendarMonth(newMonth);
+                                setStartDateCalendarYear(newYear);
+                              }}
+                              className="p-1 hover:bg-gray-100 rounded"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                              </svg>
+                            </button>
+                            <div className="font-medium">
+                              {new Date(startDateCalendarYear, startDateCalendarMonth).toLocaleString('default', { month: 'long' })} {startDateCalendarYear}
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const newMonth = startDateCalendarMonth === 11 ? 0 : startDateCalendarMonth + 1;
+                                const newYear = startDateCalendarMonth === 11 ? startDateCalendarYear + 1 : startDateCalendarYear;
+                                setStartDateCalendarMonth(newMonth);
+                                setStartDateCalendarYear(newYear);
+                              }}
+                              className="p-1 hover:bg-gray-100 rounded"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 p-2">
+                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day, index) => (
+                              <div key={index} className="text-center text-xs font-medium text-gray-500 py-1">
+                                {day}
+                              </div>
+                            ))}
+                            
+                            {Array.from({ length: new Date(startDateCalendarYear, startDateCalendarMonth, 1).getDay() }).map((_, index) => (
+                              <div key={`empty-start-${index}`} className="p-1"></div>
+                            ))}
+                            
+                            {Array.from({ length: getDaysInMonthFn(startDateCalendarMonth, startDateCalendarYear) }).map((_, index) => {
+                              const day = index + 1;
+                              const currentDate = new Date();
+                              const isToday = 
+                                day === currentDate.getDate() && 
+                                startDateCalendarMonth === currentDate.getMonth() && 
+                                startDateCalendarYear === currentDate.getFullYear();
+                                
+                              return (
+                                <div 
+                                  key={`day-${day}`} 
+                                  onClick={() => {
+                                    const selectedDate = new Date(startDateCalendarYear, startDateCalendarMonth, day);
+                                    updateTherapyReportForm('startDate', selectedDate);
+                                    setStartDateCalendarOpen(false);
+                                  }}
+                                  className={`
+                                    text-center py-1 cursor-pointer hover:bg-blue-100 rounded text-sm
+                                    ${isToday ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}
+                                  `}
+                                >
+                                  {day}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* End Date */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Treatment End Date <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        value={therapyReportForm.endDate ? formatDate(therapyReportForm.endDate) : ''}
+                        readOnly
+                        placeholder="Select end date"
+                        className={`w-full border rounded-md py-2 px-3 bg-white cursor-pointer ${
+                          therapyReportErrors.endDate 
+                            ? 'border-red-500' 
+                            : 'border-gray-300'
+                        }`}
+                        onClick={() => {
+                          setEndDateCalendarOpen(!endDateCalendarOpen);
+                          setStartDateCalendarOpen(false);
+                        }}
+                      />
+                      <button 
+                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                        onClick={() => {
+                          setEndDateCalendarOpen(!endDateCalendarOpen);
+                          setStartDateCalendarOpen(false);
+                        }}
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      
+                      {/* End Date Calendar */}
+                      {endDateCalendarOpen && (
+                        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-md shadow-lg z-20">
+                          <div className="p-2 flex justify-between items-center border-b border-gray-200">
+                            <button 
+                              onClick={() => {
+                                const newMonth = endDateCalendarMonth === 0 ? 11 : endDateCalendarMonth - 1;
+                                const newYear = endDateCalendarMonth === 0 ? endDateCalendarYear - 1 : endDateCalendarYear;
+                                setEndDateCalendarMonth(newMonth);
+                                setEndDateCalendarYear(newYear);
+                              }}
+                              className="p-1 hover:bg-gray-100 rounded"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                              </svg>
+                            </button>
+                            <div className="font-medium">
+                              {new Date(endDateCalendarYear, endDateCalendarMonth).toLocaleString('default', { month: 'long' })} {endDateCalendarYear}
+                            </div>
+                            <button 
+                              onClick={() => {
+                                const newMonth = endDateCalendarMonth === 11 ? 0 : endDateCalendarMonth + 1;
+                                const newYear = endDateCalendarMonth === 11 ? endDateCalendarYear + 1 : endDateCalendarYear;
+                                setEndDateCalendarMonth(newMonth);
+                                setEndDateCalendarYear(newYear);
+                              }}
+                              className="p-1 hover:bg-gray-100 rounded"
+                            >
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-7 gap-1 p-2">
+                            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((day, index) => (
+                              <div key={index} className="text-center text-xs font-medium text-gray-500 py-1">
+                                {day}
+                              </div>
+                            ))}
+                            
+                            {Array.from({ length: new Date(endDateCalendarYear, endDateCalendarMonth, 1).getDay() }).map((_, index) => (
+                              <div key={`empty-end-${index}`} className="p-1"></div>
+                            ))}
+                            
+                            {Array.from({ length: getDaysInMonthFn(endDateCalendarMonth, endDateCalendarYear) }).map((_, index) => {
+                              const day = index + 1;
+                              const currentDate = new Date();
+                              const isToday = 
+                                day === currentDate.getDate() && 
+                                endDateCalendarMonth === currentDate.getMonth() && 
+                                endDateCalendarYear === currentDate.getFullYear();
+                                
+                              return (
+                                <div 
+                                  key={`day-${day}`} 
+                                  onClick={() => {
+                                    const selectedDate = new Date(endDateCalendarYear, endDateCalendarMonth, day);
+                                    updateTherapyReportForm('endDate', selectedDate);
+                                    setEndDateCalendarOpen(false);
+                                  }}
+                                  className={`
+                                    text-center py-1 cursor-pointer hover:bg-blue-100 rounded text-sm
+                                    ${isToday ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}
+                                  `}
+                                >
+                                  {day}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Current Therapy Status (current findings) */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Current Therapy Status (current findings) <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={therapyReportForm.currentFindings}
+                    onChange={(e) => updateTherapyReportForm('currentFindings', e.target.value)}
+                    rows={6}
+                    className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 resize-vertical ${
+                      therapyReportErrors.currentFindings 
+                        ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
+                    placeholder="Describe the current therapy status and findings..."
+                    required
+                  />
+                </div>
+
+                {/* Special features during treatment course */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Notes <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={therapyReportForm.specialFeatures}
+                    onChange={(e) => updateTherapyReportForm('specialFeatures', e.target.value)}
+                    rows={6}
+                    className={`w-full border rounded-md px-3 py-2 focus:outline-none focus:ring-2 resize-vertical ${
+                      therapyReportErrors.specialFeatures 
+                        ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                        : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+                    }`}
+                    placeholder="Describe any special features observed during the treatment course..."
+                    required
+                  />
+                </div>
+
+                {/* Execution/Modification of Treatment */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Execution/Modification of Treatment</h3>
+                  
+                  {/* Treatment according to prescription */}
+                  <div className="mb-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={therapyReportForm.treatmentAccordingToPrescription}
+                        onChange={(e) => updateTherapyReportForm('treatmentAccordingToPrescription', e.target.checked)}
+                        className="mr-2 h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Treatment according to prescription</span>
+                    </label>
+                  </div>
+
+                  {/* Continuation of therapy recommended */}
+                  <div className="mb-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={therapyReportForm.continuationOfTherapyRecommended}
+                        onChange={(e) => updateTherapyReportForm('continuationOfTherapyRecommended', e.target.checked)}
+                        className="mr-2 h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Continuation of therapy recommended</span>
+                    </label>
+                  </div>
+
+                  {/* Change options */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">Change</h4>
+                    <div className="space-y-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={therapyReportForm.changeTherapyFrequency}
+                          onChange={(e) => updateTherapyReportForm('changeTherapyFrequency', e.target.checked)}
+                          className="mr-2 h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">Therapy frequency</span>
+                      </label>
+                      
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={therapyReportForm.changeIndividualTherapy}
+                          onChange={(e) => updateTherapyReportForm('changeIndividualTherapy', e.target.checked)}
+                          className="mr-2 h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">Individual therapy</span>
+                      </label>
+                      
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={therapyReportForm.changeGroupTherapy}
+                          onChange={(e) => updateTherapyReportForm('changeGroupTherapy', e.target.checked)}
+                          className="mr-2 h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                        />
+                        <span className="text-sm text-gray-700">Group therapy</span>
+                      </label>
+                    </div>
+                    
+                    <p className="text-xs text-gray-600 italic mt-3">
+                      after consultation with the prescribing doctor
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Modal Footer */}
-            <div className="flex justify-end gap-3 p-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
+            <div className="flex justify-end gap-3 p-4 border-t border-gray-200">
               <button 
-                onClick={closeTransferModal}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 text-sm font-medium"
+                onClick={closeTherapyReportModal}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md text-sm font-medium"
               >
                 Cancel
               </button>
               <button 
-                onClick={confirmTransfer}
-                disabled={!selectedTherapist}
-                className={`px-4 py-2 rounded-md text-sm font-medium ${
-                  selectedTherapist 
-                    ? 'bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500' 
-                    : 'bg-blue-300 text-white cursor-not-allowed'
-                }`}
+                onClick={handleTherapyReportSubmit}
+                className="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-md text-sm font-medium"
               >
-                Confirm Transfer
+                Create Report
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Removed modals for simplified prototype */}
     </WireframeLayout>
   );
 } 
