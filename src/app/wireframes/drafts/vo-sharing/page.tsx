@@ -2097,6 +2097,13 @@ export default function VOSharingWireframe() {
     setIsLogsModalOpen(!isLogsModalOpen);
   };
 
+  // Function to handle patient click (placeholder for wireframe)
+  const handlePatientClick = (patient: Patient) => {
+    console.log('Patient clicked:', patient.name);
+    // This is a placeholder function for the wireframe
+    // In a real application, this could navigate to patient details or show a modal
+  };
+
   // Function to toggle card collapse
   const toggleCardCollapse = (itemId: number) => {
     setCollapsedCards(prev => 
@@ -3754,9 +3761,8 @@ export default function VOSharingWireframe() {
               <div className="col-span-1">Transfer Status</div> {/* New Transfer Status Column - moved to last */}
             </div>
 
-            {/* Table Rows - with green background for treated patients */}
-            {(activeTab === 'open-prescriptions' || activeTab === 'shared-prescriptions') ? 
-              patients.map((patient) => (
+            {/* Table Rows for Open Prescriptions */}
+            {activeTab === 'open-prescriptions' && patients.map((patient) => (
               <div 
                 key={patient.id} 
                 className={`grid grid-cols-12 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
@@ -3797,15 +3803,11 @@ export default function VOSharingWireframe() {
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-300">
                       Abgebrochen
                     </span>
-                  ) : activeTab === 'open-prescriptions' && (patient.voDisplayStatus === 'Aktiv' || !patient.voDisplayStatus) ? (
+                  ) : (patient.voDisplayStatus === 'Aktiv' || !patient.voDisplayStatus) ? (
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-300">
                       Aktiv
                     </span>
-                  ) : activeTab === 'inactive-patients' && patient.voDisplayStatus !== 'Abgebrochen' ? (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-300">
-                      Abgerechnet
-                    </span>
-                  ) : null /* Default case */}
+                  ) : null}
                 </div>
                 <div className="col-span-1">
                   <span className={`font-medium ${patient.completedTreatments === patient.totalTreatments ? 'text-green-600' : 'text-blue-600'}`}>
@@ -3832,8 +3834,10 @@ export default function VOSharingWireframe() {
                   )}
                 </div>
               </div>
-            )) : 
-            inactivePatients.map((patient) => (
+            ))}
+
+            {/* Table Rows for Inactive Patients */}
+            {activeTab === 'inactive-patients' && inactivePatients.map((patient) => (
               <div 
                 key={patient.id} 
                 className={`grid grid-cols-12 gap-4 py-3 px-4 border-t border-gray-200 items-center ${
@@ -3874,15 +3878,11 @@ export default function VOSharingWireframe() {
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800 border border-red-300">
                       Abgebrochen
                     </span>
-                  ) : activeTab === 'open-prescriptions' && (patient.voDisplayStatus === 'Aktiv' || !patient.voDisplayStatus) ? (
-                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800 border border-green-300">
-                      Aktiv
-                    </span>
-                  ) : activeTab === 'inactive-patients' && patient.voDisplayStatus !== 'Abgebrochen' ? (
+                  ) : patient.voDisplayStatus !== 'Abgebrochen' ? (
                     <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800 border border-blue-300">
                       Abgerechnet
                     </span>
-                  ) : null /* Default case */}
+                  ) : null}
                 </div>
                 <div className="col-span-1">
                   <span className={`font-medium ${patient.completedTreatments === patient.totalTreatments ? 'text-green-600' : 'text-blue-600'}`}>
@@ -5106,7 +5106,8 @@ export default function VOSharingWireframe() {
                     {/* Dropdown Options */}
                     {isTransferPatientDropdownOpen && (
                       <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                        {availableTherapists
+                        {therapists
+                          .filter(therapist => therapist !== currentUser) // Exclude current user for transfers
                           .filter(therapist => therapist.toLowerCase().includes(transferPatientSearchTerm.toLowerCase()))
                           .map((therapist) => (
                             <button
